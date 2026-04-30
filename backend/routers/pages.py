@@ -819,23 +819,44 @@ async def _call_gemini(messages: list, system_prompt: str) -> str:
     return resp.text or ""
 
 
-async def _call_ollama(messages: list, system_prompt: str) -> str:
-    """Fallback to local Ollama instance when Gemini is unavailable."""
-    import ollama as _ollama
+async def _call_llm_service(messages: list, system_prompt: str) -> str:
+    """Fallback to a hosted LLM-as-a-service when Gemini is unavailable.
 
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    model = os.getenv("OLLAMA_MODEL", "phi3:mini")
-    ollama_msgs = [{"role": "system", "content": system_prompt}] + [
-        {"role": m.get("role", "user"), "content": m.get("content", "")}
+    Expects env vars:
+      LLM_SERVICE_URL  — base URL, e.g. https://my-llm.example.com
+      LLM_SERVICE_KEY  — Bearer token for Authorization header
+      LLM_SERVICE_MODEL — model name to pass in the request body (optional)
+    Calls POST {LLM_SERVICE_URL}/api/generate
+    """
+    import json as _json
+    import urllib.request as _urlreq
+
+    base_url = os.getenv("LLM_SERVICE_URL", "").rstrip("/")
+    api_key = os.getenv("LLM_SERVICE_KEY", "")
+    model = os.getenv("LLM_SERVICE_MODEL", "")
+
+    # Flatten conversation into a single prompt for /api/generate
+    history = "\n".join(
+        f"{'User' if m.get('role') == 'user' else 'Assistant'}: {m.get('content', '')}"
         for m in messages
-    ]
-    client = _ollama.AsyncClient(host=base_url)
-    resp = await client.chat(
-        model=model,
-        messages=ollama_msgs,
-        options={"temperature": 0.7, "num_predict": 600},
     )
-    return resp.message.content.strip()
+    prompt = f"{system_prompt}\n\n{history}\nAssistant:"
+
+    payload = _json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.7, "num_predict": 600},
+    }).encode()
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req = _urlreq.Request(f"{base_url}/api/generate", data=payload, headers=headers)
+    with _urlreq.urlopen(req, timeout=30) as r:
+        data = _json.loads(r.read())
+    return (data.get("response") or data.get("content") or "").strip()
 
 
 @router.post("/api/chat")
@@ -853,7 +874,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "You've reached today's query limit. Come back later.",
                              "remaining": 0, "blocked": True}, status_code=429)
 
-    if not os.getenv("GEMINI_API_KEY") and not os.getenv("OLLAMA_BASE_URL"):
+    if not os.getenv("GEMINI_API_KEY") and not os.getenv("LLM_SERVICE_URL"):
         return JSONResponse({"error": "SIGMA is offline — no AI backend configured.",
                              "remaining": remaining}, status_code=503)
 
@@ -876,19 +897,17 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             gemini_err = e
             print(f"[gemini] error: {e}")
 
-    # Fallback to Ollama
-    ollama_err = None
-    if not reply and os.getenv("OLLAMA_BASE_URL"):
+    # Fallback to hosted LLM service
+    llm_err = None
+    if not reply and os.getenv("LLM_SERVICE_URL"):
         try:
-            reply = await _call_ollama(messages, system_prompt)
+            reply = await _call_llm_service(messages, system_prompt)
         except Exception as e:
-            ollama_err = e
-            print(f"[ollama] fallback error: {e}")
+            llm_err = e
+            print(f"[llm_service] fallback error: {e}")
 
     if not reply:
-        # If Ollama was available but also failed, show a generic error
-        # rather than echoing the Gemini quota message
-        if ollama_err is not None:
+        if llm_err is not None:
             err_key = "general"
         else:
             err_key = _classify_error(gemini_err) if gemini_err else "general"

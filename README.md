@@ -12,7 +12,7 @@ Built with FastAPI + Jinja2 + HTMX. No frontend build step required.
 - **Templates**: Jinja2 (server-rendered HTML)
 - **Styling**: Custom CSS (black/white/grey, enterprise design)
 - **Interactivity**: HTMX + vanilla JS
-- **AI Chat**: SIGMA chatbot — Gemini `gemini-2.0-flash` (primary) + Ollama (fallback)
+- **AI Chat**: SIGMA chatbot — Gemini `gemini-2.0-flash` (primary) + hosted LLM service (fallback)
 - **Deployment**: Railway (Python only, nixpacks)
 
 ---
@@ -68,23 +68,17 @@ The script creates a virtualenv, installs dependencies, and starts the server.
 | `ADMIN_PASSWORD` | Password for the `/admin` interface |
 | `GEMINI_API_KEY` | Google AI Studio API key — primary SIGMA backend |
 
-### Ollama (fallback AI — optional but recommended)
+### LLM Fallback (optional)
 
-| Variable | Description | Default |
-|---|---|---|
-| `OLLAMA_BASE_URL` | URL of running Ollama server | set by `run.py` at startup |
-| `OLLAMA_MODEL` | Model name to use and pull on first boot | `phi3:mini` |
-| `OLLAMA_MODELS` | Directory to store downloaded models | `/models` |
+Used when Gemini quota is exceeded. Point to any hosted LLM service that exposes a `/api/generate` endpoint.
 
-On Railway, attach a persistent volume at `/models` to cache the model across deploys.
+| Variable | Description |
+|---|---|
+| `LLM_SERVICE_URL` | Base URL of the hosted LLM service, e.g. `https://llm.example.com` |
+| `LLM_SERVICE_KEY` | Bearer token for the service (sent as `Authorization: Bearer ...`) |
+| `LLM_SERVICE_MODEL` | Model name to pass in the request body |
 
-`run.py` downloads the Ollama binary automatically at startup and starts the server.
-On first boot it pulls `OLLAMA_MODEL` into the volume. Subsequent boots skip the download.
-
-If the auto-pull fails (e.g. incorrect model name), SSH into the Railway container and run:
-```bash
-OLLAMA_MODELS=/models /app/ollama pull <model-name>
-```
+If `LLM_SERVICE_URL` is not set, SIGMA will return a friendly "at capacity" message when Gemini is unavailable.
 
 ### Railway-injected (do not set manually)
 
@@ -111,8 +105,8 @@ Sections managed via admin:
 1. Push to GitHub.
 2. Connect repo in Railway — auto-detected via `nixpacks.toml`.
 3. Add a PostgreSQL plugin — `DATABASE_URL` is injected automatically.
-4. Add a persistent volume mounted at `/models` (for Ollama model cache).
-5. Set environment variables: `SECRET_KEY`, `ADMIN_PASSWORD`, `GEMINI_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`.
+4. Set environment variables: `SECRET_KEY`, `ADMIN_PASSWORD`, `GEMINI_API_KEY`.
+5. Optionally set `LLM_SERVICE_URL`, `LLM_SERVICE_KEY`, `LLM_SERVICE_MODEL` for fallback AI.
 6. Railway injects `PORT` automatically — do **not** set a custom target port.
 
 Seed data (full profile, 19 projects, skills, experience, wiki) is applied automatically on first boot.
@@ -124,7 +118,7 @@ Seed data (full profile, 19 projects, skills, experience, wiki) is applied autom
 SIGMA is a restricted AI assistant that answers questions about Praveen's career.
 
 - **Primary**: Gemini `gemini-2.0-flash` via Google AI Studio (free tier)
-- **Fallback**: Ollama local model when Gemini quota is exceeded
+- **Fallback**: Hosted LLM service via `POST {LLM_SERVICE_URL}/api/generate` with Bearer auth
 - **Context**: Pulls relevant sections from the SIGMA Wiki (admin-editable)
 - **Rate limit**: 20 queries per session per hour
 - **Stop**: Users can abort generation mid-stream via the stop button

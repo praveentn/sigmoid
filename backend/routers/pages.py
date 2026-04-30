@@ -819,44 +819,38 @@ async def _call_gemini(messages: list, system_prompt: str) -> str:
     return resp.text or ""
 
 
-async def _call_llm_service(messages: list, system_prompt: str) -> str:
-    """Fallback to a hosted LLM-as-a-service when Gemini is unavailable.
+async def _call_sigmollm(messages: list, system_prompt: str) -> str:
+    """Primary LLM — SigmoLLM hosted service.
 
-    Expects env vars:
-      LLM_SERVICE_URL  — base URL, e.g. https://my-llm.example.com
-      LLM_SERVICE_KEY  — Bearer token for Authorization header
-      LLM_SERVICE_MODEL — model name to pass in the request body (optional)
-    Calls POST {LLM_SERVICE_URL}/api/generate
+    Env vars:
+      SIGMOLLM_URL      — base URL, e.g. https://sigmollm-production.up.railway.app
+      SIGMOLLM_API_KEY  — Bearer token
+    Calls POST /api/chat with multi-turn messages.
     """
-    import json as _json
-    import urllib.request as _urlreq
+    import httpx
 
-    base_url = os.getenv("LLM_SERVICE_URL", "").rstrip("/")
-    api_key = os.getenv("LLM_SERVICE_KEY", "")
-    model = os.getenv("LLM_SERVICE_MODEL", "")
+    base_url = os.getenv("SIGMOLLM_URL", "").rstrip("/")
+    api_key  = os.getenv("SIGMOLLM_API_KEY", "")
 
-    # Flatten conversation into a single prompt for /api/generate
-    history = "\n".join(
-        f"{'User' if m.get('role') == 'user' else 'Assistant'}: {m.get('content', '')}"
+    # Prepend system prompt as the first user/system turn
+    chat_messages = [{"role": "system", "content": system_prompt}] + [
+        {"role": m.get("role", "user"), "content": m.get("content", "")}
         for m in messages
-    )
-    prompt = f"{system_prompt}\n\n{history}\nAssistant:"
+    ]
 
-    payload = _json.dumps({
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.7, "num_predict": 600},
-    }).encode()
+    async with httpx.AsyncClient(
+        base_url=base_url,
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=120,
+    ) as client:
+        res = await client.post("/api/chat", json={
+            "messages": chat_messages,
+            "options": {"temperature": 0.7, "num_predict": 600},
+        })
+        res.raise_for_status()
+        data = res.json()
 
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    req = _urlreq.Request(f"{base_url}/api/generate", data=payload, headers=headers)
-    with _urlreq.urlopen(req, timeout=30) as r:
-        data = _json.loads(r.read())
-    return (data.get("response") or data.get("content") or "").strip()
+    return (data.get("message", {}).get("content") or "").strip()
 
 
 @router.post("/api/chat")
@@ -874,7 +868,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "You've reached today's query limit. Come back later.",
                              "remaining": 0, "blocked": True}, status_code=429)
 
-    if not os.getenv("GEMINI_API_KEY") and not os.getenv("LLM_SERVICE_URL"):
+    if not os.getenv("SIGMOLLM_URL") and not os.getenv("GEMINI_API_KEY"):
         return JSONResponse({"error": "SIGMA is offline — no AI backend configured.",
                              "remaining": remaining}, status_code=503)
 
@@ -887,30 +881,27 @@ async def chat(request: Request, db: Session = Depends(get_db)):
     system_prompt = _build_system_prompt(profile, context)
 
     reply = ""
-    gemini_err: Exception | None = None
+    primary_err: Exception | None = None
 
-    # Try Gemini first
-    if os.getenv("GEMINI_API_KEY"):
+    # Primary: SigmoLLM
+    if os.getenv("SIGMOLLM_URL"):
+        try:
+            reply = await _call_sigmollm(messages, system_prompt)
+        except Exception as e:
+            primary_err = e
+            print(f"[sigmollm] error: {e}")
+
+    # Fallback: Gemini
+    fallback_err = None
+    if not reply and os.getenv("GEMINI_API_KEY"):
         try:
             reply = await _call_gemini(messages, system_prompt)
         except Exception as e:
-            gemini_err = e
-            print(f"[gemini] error: {e}")
-
-    # Fallback to hosted LLM service
-    llm_err = None
-    if not reply and os.getenv("LLM_SERVICE_URL"):
-        try:
-            reply = await _call_llm_service(messages, system_prompt)
-        except Exception as e:
-            llm_err = e
-            print(f"[llm_service] fallback error: {e}")
+            fallback_err = e
+            print(f"[gemini] fallback error: {e}")
 
     if not reply:
-        if llm_err is not None:
-            err_key = "general"
-        else:
-            err_key = _classify_error(gemini_err) if gemini_err else "general"
+        err_key = _classify_error(fallback_err) if fallback_err else "general"
         return JSONResponse({"error": _USER_ERRORS[err_key], "remaining": remaining}, status_code=503)
 
     return JSONResponse({"reply": reply, "remaining": remaining, "blocked": False})

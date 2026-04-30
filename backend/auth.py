@@ -15,7 +15,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production-please-use-a-lon
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# sha256_crypt: no 72-byte limit (avoids passlib + bcrypt>=4.0 incompatibility)
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
 
 

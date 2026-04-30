@@ -789,10 +789,10 @@ def _classify_error(exc: Exception) -> str:
 
 
 _USER_ERRORS = {
-    "quota_exceeded": "SIGMA is at capacity right now — please try again in a minute.",
+    "quota_exceeded": "SIGMA is at capacity right now — please try again in a few minutes.",
     "auth_error":     "SIGMA is temporarily offline. Please try again later.",
     "timeout":        "SIGMA took too long to respond. Please try again.",
-    "general":        "SIGMA encountered an issue. Please try again.",
+    "general":        "SIGMA is temporarily unavailable. Please try again shortly.",
 }
 
 
@@ -825,30 +825,46 @@ async def _call_sigmollm(messages: list, system_prompt: str) -> str:
     Env vars:
       SIGMOLLM_URL      — base URL, e.g. https://sigmollm-production.up.railway.app
       SIGMOLLM_API_KEY  — Bearer token
-    Calls POST /api/chat with multi-turn messages.
+    Calls POST /api/chat  (Ollama-compatible wrapper).
+    System prompt goes as top-level "system" field, not as a role in messages.
     """
     import httpx
 
     base_url = os.getenv("SIGMOLLM_URL", "").rstrip("/")
     api_key  = os.getenv("SIGMOLLM_API_KEY", "")
 
-    # Prepend system prompt as the first user/system turn
-    chat_messages = [{"role": "system", "content": system_prompt}] + [
+    # Only user/assistant turns in messages; system prompt at top level
+    chat_messages = [
         {"role": m.get("role", "user"), "content": m.get("content", "")}
         for m in messages
     ]
 
+    headers = {"Authorization": f"Bearer {api_key}"}
+
     async with httpx.AsyncClient(
         base_url=base_url,
-        headers={"Authorization": f"Bearer {api_key}"},
+        headers=headers,
         timeout=120,
         follow_redirects=True,
     ) as client:
+        # Pre-flight health check
+        try:
+            health = await client.get("/health", timeout=5)
+            hdata = health.json()
+            print(f"[sigmollm] health: {hdata}")
+            if hdata.get("ollama") != "reachable":
+                raise RuntimeError(f"SigmoLLM Ollama not reachable: {hdata}")
+        except httpx.RequestError as e:
+            raise RuntimeError(f"SigmoLLM unreachable: {e}") from e
+
         res = await client.post("/api/chat", json={
+            "system": system_prompt,
             "messages": chat_messages,
             "options": {"temperature": 0.7, "num_predict": 600},
         })
-        res.raise_for_status()
+        if not res.is_success:
+            print(f"[sigmollm] /api/chat {res.status_code}: {res.text[:500]}")
+            res.raise_for_status()
         data = res.json()
 
     return (data.get("message", {}).get("content") or "").strip()

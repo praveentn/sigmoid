@@ -1,0 +1,51 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} categories</span>
+  <button class="a-btn-add" onclick="toggleAddForm()">+ Add</button>
+</div>
+<div id="add-form" class="a-add-form">
+  <form hx-post="/admin/section/skills" hx-target="#section-content" hx-swap="innerHTML">
+    <div class="a-row a-row-2">
+      <div class="a-field"><label class="a-label">Category</label><input class="a-input" name="category" required /></div>
+      <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ items|length + 1 }}" /></div>
+    </div>
+    <div class="a-field"><label class="a-label">Items (comma separated)</label><textarea class="a-textarea" name="items_text" placeholder="Python, FastAPI, React, ..."></textarea></div>
+    <div class="a-form-actions">
+      <button type="submit" class="a-btn a-btn-save">Save</button>
+      <button type="button" class="a-btn a-btn-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+{% for item in items %}
+<div id="sk-{{ item.id }}" class="a-card">
+  <div class="a-card-header">
+    <div>
+      <div class="a-card-title">{{ item.category }}</div>
+      <div class="a-card-sub">{{ item.items|join(', ') }}</div>
+    </div>
+    <div class="a-card-actions">
+      <button class="a-btn a-btn-edit" onclick="toggleEdit('sk-{{ item.id }}')">Edit</button>
+      <form style="display:inline" hx-post="/admin/section/skills/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <div id="edit-sk-{{ item.id }}" class="a-edit-form" style="display:none">
+    <form hx-post="/admin/section/skills/{{ item.id }}" hx-target="#section-content" hx-swap="innerHTML">
+      <div class="a-row a-row-2">
+        <div class="a-field"><label class="a-label">Category</label><input class="a-input" name="category" value="{{ item.category }}" required /></div>
+        <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ item.order }}" /></div>
+      </div>
+      <div class="a-field"><label class="a-label">Items (comma separated)</label><textarea class="a-textarea" name="items_text">{{ item.items|join(', ') if item.items else '' }}</textarea></div>
+      <div class="a-form-actions">
+        <button type="submit" class="a-btn a-btn-save">Save</button>
+        <button type="button" class="a-btn a-btn-cancel" onclick="toggleEdit('sk-{{ item.id }}')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+<script>
+function toggleAddForm(){document.getElementById('add-form').classList.toggle('open')}
+function toggleEdit(id){const f=document.getElementById('edit-'+id);f.style.display=f.style.display==='none'?'block':'none'}
+</script>

@@ -1,0 +1,55 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} certifications</span>
+  <button class="a-btn-add" onclick="toggleAddForm()">+ Add</button>
+</div>
+<div id="add-form" class="a-add-form">
+  <form hx-post="/admin/section/certifications" hx-target="#section-content" hx-swap="innerHTML">
+    <div class="a-field"><label class="a-label">Certification Name</label><input class="a-input" name="name" required /></div>
+    <div class="a-row a-row-3">
+      <div class="a-field"><label class="a-label">Issuer</label><input class="a-input" name="issuer" /></div>
+      <div class="a-field"><label class="a-label">Year</label><input class="a-input" name="year" /></div>
+      <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ items|length + 1 }}" /></div>
+    </div>
+    <div class="a-field"><label class="a-checkbox"><input type="checkbox" name="is_featured" /><span>Featured (shown prominently)</span></label></div>
+    <div class="a-form-actions">
+      <button type="submit" class="a-btn a-btn-save">Save</button>
+      <button type="button" class="a-btn a-btn-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+{% for item in items %}
+<div id="cert-{{ item.id }}" class="a-card">
+  <div class="a-card-header">
+    <div>
+      <div class="a-card-title">{{ item.name }}{% if item.is_featured %}<span class="a-badge">FEATURED</span>{% endif %}</div>
+      <div class="a-card-sub">{{ item.issuer }} &middot; {{ item.year }}</div>
+    </div>
+    <div class="a-card-actions">
+      <button class="a-btn a-btn-edit" onclick="toggleEdit('cert-{{ item.id }}')">Edit</button>
+      <form style="display:inline" hx-post="/admin/section/certifications/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <div id="edit-cert-{{ item.id }}" class="a-edit-form" style="display:none">
+    <form hx-post="/admin/section/certifications/{{ item.id }}" hx-target="#section-content" hx-swap="innerHTML">
+      <div class="a-field"><label class="a-label">Name</label><input class="a-input" name="name" value="{{ item.name }}" required /></div>
+      <div class="a-row a-row-3">
+        <div class="a-field"><label class="a-label">Issuer</label><input class="a-input" name="issuer" value="{{ item.issuer or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Year</label><input class="a-input" name="year" value="{{ item.year or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ item.order }}" /></div>
+      </div>
+      <div class="a-field"><label class="a-checkbox"><input type="checkbox" name="is_featured" {% if item.is_featured %}checked{% endif %} /><span>Featured</span></label></div>
+      <div class="a-form-actions">
+        <button type="submit" class="a-btn a-btn-save">Save</button>
+        <button type="button" class="a-btn a-btn-cancel" onclick="toggleEdit('cert-{{ item.id }}')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+<script>
+function toggleAddForm(){document.getElementById('add-form').classList.toggle('open')}
+function toggleEdit(id){const f=document.getElementById('edit-'+id);f.style.display=f.style.display==='none'?'block':'none'}
+</script>

@@ -1,0 +1,55 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} awards</span>
+  <button class="a-btn-add" onclick="toggleAddForm()">+ Add</button>
+</div>
+<div id="add-form" class="a-add-form">
+  <form hx-post="/admin/section/awards" hx-target="#section-content" hx-swap="innerHTML">
+    <div class="a-field"><label class="a-label">Title</label><input class="a-input" name="title" required /></div>
+    <div class="a-row a-row-3">
+      <div class="a-field"><label class="a-label">Organization</label><input class="a-input" name="organization" /></div>
+      <div class="a-field"><label class="a-label">Year</label><input class="a-input" name="year" /></div>
+      <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ items|length + 1 }}" /></div>
+    </div>
+    <div class="a-field"><label class="a-label">Description</label><textarea class="a-textarea" name="description"></textarea></div>
+    <div class="a-form-actions">
+      <button type="submit" class="a-btn a-btn-save">Save</button>
+      <button type="button" class="a-btn a-btn-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+{% for item in items %}
+<div id="aw-{{ item.id }}" class="a-card">
+  <div class="a-card-header">
+    <div>
+      <div class="a-card-title">{{ item.title }}</div>
+      <div class="a-card-sub">{{ item.organization }} &middot; {{ item.year }}</div>
+    </div>
+    <div class="a-card-actions">
+      <button class="a-btn a-btn-edit" onclick="toggleEdit('aw-{{ item.id }}')">Edit</button>
+      <form style="display:inline" hx-post="/admin/section/awards/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <div id="edit-aw-{{ item.id }}" class="a-edit-form" style="display:none">
+    <form hx-post="/admin/section/awards/{{ item.id }}" hx-target="#section-content" hx-swap="innerHTML">
+      <div class="a-field"><label class="a-label">Title</label><input class="a-input" name="title" value="{{ item.title }}" required /></div>
+      <div class="a-row a-row-3">
+        <div class="a-field"><label class="a-label">Organization</label><input class="a-input" name="organization" value="{{ item.organization or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Year</label><input class="a-input" name="year" value="{{ item.year or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ item.order }}" /></div>
+      </div>
+      <div class="a-field"><label class="a-label">Description</label><textarea class="a-textarea" name="description">{{ item.description or '' }}</textarea></div>
+      <div class="a-form-actions">
+        <button type="submit" class="a-btn a-btn-save">Save</button>
+        <button type="button" class="a-btn a-btn-cancel" onclick="toggleEdit('aw-{{ item.id }}')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+<script>
+function toggleAddForm(){document.getElementById('add-form').classList.toggle('open')}
+function toggleEdit(id){const f=document.getElementById('edit-'+id);f.style.display=f.style.display==='none'?'block':'none'}
+</script>

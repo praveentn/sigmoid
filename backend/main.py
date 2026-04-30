@@ -3,11 +3,11 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.database import Base, SessionLocal, engine
 from backend.routers import auth, awards, certifications, education, experience, impact, profile, projects, research, skills
+from backend.routers import pages
 from backend.seed import run_seed
 
 app = FastAPI(title="Praveen T N — Portfolio API", version="1.0.0", docs_url="/api/docs")
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# JSON API routes
 API_PREFIX = "/api/v1"
 for router in [
     auth.router,
@@ -35,6 +36,14 @@ for router in [
 ]:
     app.include_router(router, prefix=API_PREFIX)
 
+# HTML page routes (Jinja2 + HTMX admin)
+app.include_router(pages.router)
+
+# Static files
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 
 @app.on_event("startup")
 def startup():
@@ -44,23 +53,3 @@ def startup():
         run_seed(db)
     finally:
         db.close()
-
-
-# Serve React frontend (production build)
-FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
-
-if FRONTEND_DIST.exists():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def serve_react(full_path: str):
-        # Serve static files that exist
-        candidate = FRONTEND_DIST / full_path
-        if candidate.is_file():
-            return FileResponse(str(candidate))
-        # Fallback to index.html (SPA routing)
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
-else:
-    @app.get("/", include_in_schema=False)
-    def root():
-        return {"message": "API is running. Build the React frontend to see the UI."}

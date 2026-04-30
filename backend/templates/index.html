@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="container">
+    <a href="#" class="header-logo">
+      <span class="name">{{ profile.name if profile else 'Praveen T N' }}</span>
+      <span class="sub">AI & Data Architect</span>
+    </a>
+    <nav class="header-nav">
+      <a href="#about">About</a>
+      <a href="#experience">Experience</a>
+      <a href="#projects">Work</a>
+      <a href="#education">Education</a>
+      <a href="#research">Research</a>
+      {% if profile %}
+      <a href="mailto:{{ profile.email }}" class="header-cta">Contact</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+
+<!-- ── Hero ───────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-grid"></div>
+  <div class="container hero-content">
+    <div class="hero-pre">
+      <span>{{ profile.company if profile else 'Material Plus' }} &mdash; {{ profile.location if profile else 'Bengaluru, India' }}</span>
+    </div>
+    {% if profile %}
+    <h1>
+      {% for word in profile.name.split(' ') %}
+      <span class="hero-title-line">{{ word }}</span>
+      {% endfor %}
+    </h1>
+    <div class="hero-role">
+      <p>{{ profile.title }}</p>
+    </div>
+    <p class="hero-tagline">{{ profile.tagline }}</p>
+    <div class="hero-actions">
+      {% if profile.linkedin_url %}
+      <a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+        LinkedIn Profile &nearr;
+      </a>
+      {% endif %}
+      <a href="#experience" class="btn-outline-light">View Career</a>
+      {% if profile.email %}
+      <a href="mailto:{{ profile.email }}" class="hero-email">{{ profile.email }}</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="hero-scroll">
+    <span>Scroll</span>
+    <div class="hero-scroll-line"></div>
+  </div>
+  <div class="hero-gradient"></div>
+</section>
+
+<!-- ── Impact Strip ───────────────────────────────────────── -->
+{% if impact %}
+<div class="impact-strip">
+  <div class="impact-grid">
+    {% for m in impact %}
+    <div class="impact-cell">
+      <span class="impact-metric" data-target="{{ m.metric }}">{{ m.metric }}</span>
+      <span class="impact-label">{{ m.label }}</span>
+      {% if m.description %}
+      <p class="impact-desc">{{ m.description }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── About ──────────────────────────────────────────────── -->
+<section id="about" class="section section--white">
+  <div class="container">
+    <div class="about-grid">
+      <!-- Bio -->
+      <div class="about-bio reveal">
+        <span class="label">About</span>
+        <h2 style="font-size:clamp(1.8rem,4vw,2.4rem);margin-bottom:2rem;">
+          AI architect.<br><span style="color:var(--silver)">Practice builder.</span>
+        </h2>
+        {% if profile and profile.bio %}
+          {% for para in profile.bio.split('\n\n') %}
+          {% if para.strip() %}<p>{{ para.strip() }}</p>{% endif %}
+          {% endfor %}
+        {% endif %}
+        <div class="about-links">
+          {% if profile and profile.linkedin_url %}
+          <a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">LinkedIn</a>
+          {% endif %}
+          {% if profile and profile.credly_url %}
+          <a href="{{ profile.credly_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Credly Badges</a>
+          {% endif %}
+          {% if profile and profile.email %}
+          <a href="mailto:{{ profile.email }}" class="btn-ghost">{{ profile.email }}</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Profile card + Awards -->
+      <div class="reveal" style="animation-delay:.12s">
+        {% if profile %}
+        <div class="profile-card">
+          <div class="profile-card-header">
+            <div>
+              <h3>{{ profile.name }}</h3>
+              <p>{{ profile.company }}</p>
+            </div>
+            <div class="profile-avatar">
+              {{ profile.name.split(' ')|map('first')|join('')|upper|truncate(2, true, '') }}
+            </div>
+          </div>
+          <div class="profile-meta">
+            {% for key, val in [
+              ('Location', profile.location),
+              ('Phone', profile.phone),
+              ('Experience', (profile.years_experience|string + '+ years') if profile.years_experience else None),
+              ('AI Solutions', (profile.solutions_delivered|string + '+ delivered') if profile.solutions_delivered else None),
+              ('Travel', profile.visa_info)
+            ] %}
+            {% if val %}
+            <div class="profile-meta-row">
+              <span class="meta-key">{{ key }}</span>
+              <span class="meta-val">{{ val }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if awards %}
+        <div class="awards-list" style="margin-top:1.5rem;">
+          <span class="label">Recognition</span>
+          {% for award in awards %}
+          <div class="award-row">
+            <div class="award-dot"></div>
+            <div>
+              <div class="award-title">{{ award.title }}</div>
+              <div class="award-meta">{{ award.organization }} &middot; {{ award.year }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Experience ──────────────────────────────────────────── -->
+{% if experience %}
+<section id="experience" class="section section--fog">
+  <div class="container">
+    <div class="exp-layout">
+      <!-- Sidebar -->
+      <div class="exp-sidebar reveal">
+        <div class="exp-sidebar-inner">
+          <span class="label">Career</span>
+          <h2 style="font-size:clamp(1.8rem,4vw,2.4rem);">Professional<br><span style="color:var(--silver)">Experience</span></h2>
+          <p>{{ experience|length }} roles across 6 organisations. 16+ years from web engineering to enterprise AI architecture.</p>
+          <div class="exp-index">
+            {% for item in experience %}
+            <span class="exp-index-item">{{ item.period_start.split(' ')[-1] if item.period_start else '' }} · {{ item.company.split(' ')[0] }}</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <!-- Timeline -->
+      <div class="exp-timeline">
+        {% for item in experience %}
+        <div class="exp-item reveal" style="animation-delay:{{ loop.index0 * 0.06 }}s">
+          <div class="exp-dot"></div>
+          <div class="exp-card">
+            <span class="exp-toggle"></span>
+            <div class="exp-meta">
+              <span class="exp-period">{{ item.period_start }} &mdash; {{ item.period_end }}</span>
+              {% if item.is_current %}<span class="exp-badge">CURRENT</span>{% endif %}
+            </div>
+            <div class="exp-role">{{ item.role }}</div>
+            <div class="exp-company">{{ item.company }}</div>
+            {% if item.location %}<div class="exp-location">{{ item.location }}</div>{% endif %}
+            {% if item.tagline %}
+            <div class="exp-tagline">{{ item.tagline }}</div>
+            {% endif %}
+            {% if item.highlights %}
+            <div class="exp-highlights">
+              <ul>
+                {% for h in item.highlights %}<li>{{ h }}</li>{% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ── Skills ──────────────────────────────────────────────── -->
+{% if skills %}
+<section id="skills" class="section section--white">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="label">Capabilities</span>
+      <h2>Technical <span>Expertise</span></h2>
+    </div>
+    <div class="skills-grid">
+      {% for skill in skills %}
+      <div class="skill-card reveal" style="animation-delay:{{ loop.index0 * 0.05 }}s">
+        <span class="skill-num">{{ '%02d'|format(loop.index) }}</span>
+        <div class="skill-cat">{{ skill.category }}</div>
+        <div class="skill-tags">
+          {% for tag in skill.items %}<span class="tag">{{ tag }}</span>{% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ── Projects ────────────────────────────────────────────── -->
+{% if projects %}
+<section id="projects" class="section section--fog">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="label">Selected Work</span>
+      <h2>Enterprise AI <span>Solutions</span></h2>
+    </div>
+
+    {# Collect unique categories #}
+    {% set cats = [] %}
+    {% for p in projects %}{% if p.category and p.category not in cats %}{% set _ = cats.append(p.category) %}{% endif %}{% endfor %}
+
+    <div class="projects-filter reveal">
+      <button class="filter-btn active" data-cat="all">All</button>
+      {% for cat in cats %}
+      <button class="filter-btn" data-cat="{{ cat }}">{{ cat }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="projects-grid">
+      {% for p in projects %}
+      <div class="project-card reveal" data-category="{{ p.category }}" style="animation-delay:{{ loop.index0 * 0.06 }}s">
+        <div class="project-header">
+          <span>
+            <span class="project-cat">{{ p.category }}</span>
+            {% if p.is_featured %}<span class="project-featured">FEATURED</span>{% endif %}
+          </span>
+          <span class="project-period">{{ p.period }}</span>
+        </div>
+        <div class="project-name">{{ p.name }}</div>
+        <div class="project-role">{{ p.company }} &middot; {{ p.role }}</div>
+        <div class="project-desc">{{ p.description }}</div>
+        {% if p.tech_stack %}
+        <div class="project-tech">
+          {% for t in p.tech_stack %}<span class="tag">{{ t }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ── Education + Certifications ─────────────────────────── -->
+<section id="education" class="section section--white">
+  <div class="container">
+    <div class="edu-certs-grid">
+      <!-- Education -->
+      {% if education %}
+      <div class="reveal">
+        <span class="label">Education</span>
+        <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);margin-bottom:2rem;">Academic <span style="color:var(--silver)">Background</span></h2>
+        <div class="edu-list">
+          {% for e in education %}
+          <div class="edu-row">
+            <div class="edu-year">{{ e.year }}</div>
+            <div>
+              <div class="edu-degree">{{ e.degree }}</div>
+              <div class="edu-inst">{{ e.institution }}</div>
+              {% if e.description %}<div class="edu-desc">{{ e.description }}</div>{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Certifications -->
+      {% if certifications %}
+      <div class="reveal" style="animation-delay:.1s">
+        <span class="label">Credentials</span>
+        <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);margin-bottom:2rem;">Certifications <span style="color:var(--silver)">&amp; Badges</span></h2>
+        <div class="cert-list">
+          {% for c in certifications %}
+          <div class="cert-row {% if c.is_featured %}featured{% endif %}">
+            <div>
+              <div class="cert-name">{{ c.name }}</div>
+              <div class="cert-issuer">{{ c.issuer }}</div>
+            </div>
+            <span class="cert-year">{{ c.year }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- ── Research ────────────────────────────────────────────── -->
+{% if research %}
+<section id="research" class="section section--dark">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="label">Intellectual Work</span>
+      <h2>Research &amp; <span>Publications</span></h2>
+      <p style="font-size:.9rem;color:rgba(255,255,255,.4);max-width:520px;margin-top:.75rem;line-height:1.7;">
+        Spanning quantum cryptography, computer vision, and evolutionary computation. Patent holder.
+      </p>
+    </div>
+    <div class="research-grid">
+      {% for r in research %}
+      <div class="research-card reveal" style="animation-delay:{{ loop.index0 * 0.08 }}s">
+        <div class="research-meta">
+          <span class="research-type">{{ r.type | capitalize }}</span>
+          {% if r.focus_area %}<span class="research-area">{{ r.focus_area }}</span>{% endif %}
+        </div>
+        <div class="research-title">{{ r.title }}</div>
+        {% if r.description %}<div class="research-desc">{{ r.description }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="patent-note reveal">
+      <div class="patent-line"></div>
+      <div>
+        <div class="patent-label">IP &amp; Innovation</div>
+        <div class="patent-text">Patent holder. Active contributor to AI research and thought leadership at Ernst &amp; Young and beyond.</div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ── Footer ──────────────────────────────────────────────── -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <h3>{{ profile.name if profile else 'Praveen T N' }}</h3>
+        <p style="margin-top:.35rem;">{{ profile.title if profile else '' }}</p>
+        <p style="margin-top:.5rem;font-size:.72rem;">{{ profile.location if profile else 'Bengaluru, India' }}</p>
+      </div>
+      <div>
+        <p class="footer-col-label">Connect</p>
+        {% if profile %}
+        {% if profile.linkedin_url %}<a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener" class="footer-link">LinkedIn</a>{% endif %}
+        {% if profile.credly_url %}<a href="{{ profile.credly_url }}" target="_blank" rel="noopener" class="footer-link">Credly Badges</a>{% endif %}
+        {% if profile.email %}<a href="mailto:{{ profile.email }}" class="footer-link">{{ profile.email }}</a>{% endif %}
+        {% if profile.phone %}<a href="tel:{{ profile.phone }}" class="footer-link">{{ profile.phone }}</a>{% endif %}
+        {% endif %}
+      </div>
+      <div>
+        <p class="footer-col-label">At a Glance</p>
+        {% if profile %}
+        {% if profile.years_experience %}<p class="footer-link" style="cursor:default">{{ profile.years_experience }}+ Years Experience</p>{% endif %}
+        {% if profile.solutions_delivered %}<p class="footer-link" style="cursor:default">{{ profile.solutions_delivered }}+ Enterprise AI Solutions</p>{% endif %}
+        {% if profile.visa_info %}<p class="footer-link" style="cursor:default">{{ profile.visa_info }}</p>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Built with FastAPI + Jinja2 + PostgreSQL</p>
+      <p>&copy; {{ 2026 }} Praveen T N. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/main.js" defer></script>
+{% endblock %}

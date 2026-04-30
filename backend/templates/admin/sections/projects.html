@@ -1,0 +1,65 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} projects</span>
+  <button class="a-btn-add" onclick="toggleAddForm()">+ Add</button>
+</div>
+<div id="add-form" class="a-add-form">
+  <form hx-post="/admin/section/projects" hx-target="#section-content" hx-swap="innerHTML">
+    <div class="a-row a-row-2">
+      <div class="a-field"><label class="a-label">Project Name</label><input class="a-input" name="name" required /></div>
+      <div class="a-field"><label class="a-label">Category</label><input class="a-input" name="category" placeholder="Agentic AI, RAG, ML…" /></div>
+      <div class="a-field"><label class="a-label">Company</label><input class="a-input" name="company" /></div>
+      <div class="a-field"><label class="a-label">Role</label><input class="a-input" name="role" /></div>
+      <div class="a-field"><label class="a-label">Period</label><input class="a-input" name="period" placeholder="2023-2024" /></div>
+      <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ items|length + 1 }}" /></div>
+    </div>
+    <div class="a-field"><label class="a-label">Description</label><textarea class="a-textarea" name="description"></textarea></div>
+    <div class="a-field"><label class="a-label">Tech Stack (comma separated)</label><input class="a-input" name="tech_text" /></div>
+    <div class="a-field"><label class="a-label">Highlights (one per line)</label><textarea class="a-textarea" name="highlights" style="min-height:80px;font-family:var(--font-mono);font-size:.75rem"></textarea></div>
+    <div class="a-field"><label class="a-checkbox"><input type="checkbox" name="is_featured" /><span>Featured project</span></label></div>
+    <div class="a-form-actions">
+      <button type="submit" class="a-btn a-btn-save">Save</button>
+      <button type="button" class="a-btn a-btn-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+{% for item in items %}
+<div id="proj-{{ item.id }}" class="a-card">
+  <div class="a-card-header">
+    <div>
+      <div class="a-card-title">{{ item.name }}{% if item.is_featured %}<span class="a-badge">FEATURED</span>{% endif %}</div>
+      <div class="a-card-sub">{{ item.company }} &middot; {{ item.category }} &middot; {{ item.period }}</div>
+    </div>
+    <div class="a-card-actions">
+      <button class="a-btn a-btn-edit" onclick="toggleEdit('proj-{{ item.id }}')">Edit</button>
+      <form style="display:inline" hx-post="/admin/section/projects/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <div id="edit-proj-{{ item.id }}" class="a-edit-form" style="display:none">
+    <form hx-post="/admin/section/projects/{{ item.id }}" hx-target="#section-content" hx-swap="innerHTML">
+      <div class="a-row a-row-2">
+        <div class="a-field"><label class="a-label">Name</label><input class="a-input" name="name" value="{{ item.name }}" required /></div>
+        <div class="a-field"><label class="a-label">Category</label><input class="a-input" name="category" value="{{ item.category or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Company</label><input class="a-input" name="company" value="{{ item.company or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Role</label><input class="a-input" name="role" value="{{ item.role or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Period</label><input class="a-input" name="period" value="{{ item.period or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ item.order }}" /></div>
+      </div>
+      <div class="a-field"><label class="a-label">Description</label><textarea class="a-textarea" name="description">{{ item.description or '' }}</textarea></div>
+      <div class="a-field"><label class="a-label">Tech Stack (comma separated)</label><input class="a-input" name="tech_text" value="{{ item.tech_stack|join(', ') if item.tech_stack else '' }}" /></div>
+      <div class="a-field"><label class="a-label">Highlights (one per line)</label><textarea class="a-textarea" name="highlights" style="min-height:100px;font-family:var(--font-mono);font-size:.75rem">{{ item.highlights|join('\n') if item.highlights else '' }}</textarea></div>
+      <div class="a-field"><label class="a-checkbox"><input type="checkbox" name="is_featured" {% if item.is_featured %}checked{% endif %} /><span>Featured</span></label></div>
+      <div class="a-form-actions">
+        <button type="submit" class="a-btn a-btn-save">Save</button>
+        <button type="button" class="a-btn a-btn-cancel" onclick="toggleEdit('proj-{{ item.id }}')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+<script>
+function toggleAddForm(){document.getElementById('add-form').classList.toggle('open')}
+function toggleEdit(id){const f=document.getElementById('edit-'+id);f.style.display=f.style.display==='none'?'block':'none'}
+</script>

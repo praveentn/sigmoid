@@ -1,0 +1,72 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+
+<form
+  hx-post="/admin/section/profile"
+  hx-target="#section-content"
+  hx-swap="innerHTML"
+>
+  <div class="a-row a-row-2" style="margin-bottom:.75rem">
+    <div class="a-field">
+      <label class="a-label">Full Name</label>
+      <input class="a-input" name="name" value="{{ profile_data.name if profile_data else '' }}" required />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Company</label>
+      <input class="a-input" name="company" value="{{ profile_data.company if profile_data else '' }}" />
+    </div>
+  </div>
+
+  <div class="a-field">
+    <label class="a-label">Title</label>
+    <input class="a-input" name="title" value="{{ profile_data.title if profile_data else '' }}" />
+  </div>
+
+  <div class="a-field">
+    <label class="a-label">Tagline</label>
+    <textarea class="a-textarea" name="tagline" style="min-height:60px">{{ profile_data.tagline if profile_data else '' }}</textarea>
+  </div>
+
+  <div class="a-field">
+    <label class="a-label">Bio (separate paragraphs with a blank line)</label>
+    <textarea class="a-textarea" name="bio" style="min-height:160px">{{ profile_data.bio if profile_data else '' }}</textarea>
+  </div>
+
+  <div class="a-row a-row-2">
+    <div class="a-field">
+      <label class="a-label">Email</label>
+      <input class="a-input" name="email" type="email" value="{{ profile_data.email if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Phone</label>
+      <input class="a-input" name="phone" value="{{ profile_data.phone if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Location</label>
+      <input class="a-input" name="location" value="{{ profile_data.location if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Visa Info</label>
+      <input class="a-input" name="visa_info" value="{{ profile_data.visa_info if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">LinkedIn URL</label>
+      <input class="a-input" name="linkedin_url" value="{{ profile_data.linkedin_url if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Credly URL</label>
+      <input class="a-input" name="credly_url" value="{{ profile_data.credly_url if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Years Experience</label>
+      <input class="a-input" name="years_experience" type="number" value="{{ profile_data.years_experience if profile_data else '' }}" />
+    </div>
+    <div class="a-field">
+      <label class="a-label">Solutions Delivered</label>
+      <input class="a-input" name="solutions_delivered" type="number" value="{{ profile_data.solutions_delivered if profile_data else '' }}" />
+    </div>
+  </div>
+
+  <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #2a2a2a">
+    <button type="submit" class="a-btn a-btn-save">Save Profile</button>
+  </div>
+</form>

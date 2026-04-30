@@ -17,7 +17,7 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 # sha256_crypt: no 72-byte limit (avoids passlib + bcrypt>=4.0 incompatibility)
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
-bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:

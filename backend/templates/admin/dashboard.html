@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Portfolio CMS{% endblock %}
+
+{% block head %}
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
+{% endblock %}
+
+{% block body %}
+<div class="admin-layout">
+
+  <!-- Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-logo">
+      <div class="name">Portfolio CMS</div>
+      <div class="sub">{{ user.username }}</div>
+    </div>
+    <nav class="admin-nav">
+      {% set sections = [
+        ('profile',        '◆', 'Profile'),
+        ('impact',         '◈', 'Impact Metrics'),
+        ('experience',     '◇', 'Experience'),
+        ('education',      '◉', 'Education'),
+        ('skills',         '◎', 'Skills'),
+        ('certifications', '◐', 'Certifications'),
+        ('projects',       '◑', 'Projects'),
+        ('research',       '◒', 'Research'),
+        ('awards',         '★', 'Awards'),
+      ] %}
+      {% for key, icon, label in sections %}
+      <button
+        class="admin-nav-link {% if active_section == key %}active{% endif %}"
+        hx-get="/admin/section/{{ key }}"
+        hx-target="#section-content"
+        hx-push-url="/admin/dashboard?section={{ key }}"
+        onclick="setActive(this)"
+      >
+        <span class="admin-nav-icon">{{ icon }}</span>
+        {{ label }}
+      </button>
+      {% endfor %}
+    </nav>
+    <div class="admin-footer-links">
+      <a href="/" target="_blank" class="admin-nav-link">
+        <span class="admin-nav-icon">↗</span> View Site
+      </a>
+      <a href="/admin/logout" class="admin-nav-link">
+        <span class="admin-nav-icon">→</span> Sign Out
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div>
+        <h1 id="section-title">{{ active_section | capitalize }}</h1>
+        <p>Editing live data</p>
+      </div>
+      <div class="admin-status">
+        <div class="status-dot"></div>
+        Connected
+      </div>
+    </div>
+    <div class="admin-content">
+      <div id="section-content" class="admin-section-panel">
+        {# Load the active section partial directly on page load #}
+        {% include "admin/sections/" + active_section + ".html" %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setActive(btn) {
+  document.querySelectorAll('.admin-nav-link').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// HTMX toast: show toast when response has HX-Trigger header with showToast event
+document.body.addEventListener('showToast', (e) => {
+  const t = document.getElementById('toast');
+  t.textContent = e.detail?.message || 'Saved.';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+});
+
+// Auto-show toast if template includes one (from full page loads)
+window.addEventListener('DOMContentLoaded', () => {
+  const msg = document.querySelector('[data-toast]');
+  if (msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg.dataset.toast;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+});
+</script>
+{% endblock %}

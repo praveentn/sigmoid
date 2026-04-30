@@ -1,0 +1,69 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} items</span>
+  <button class="a-btn-add" onclick="toggleAddForm()">+ Add</button>
+</div>
+<div id="add-form" class="a-add-form">
+  <form hx-post="/admin/section/research" hx-target="#section-content" hx-swap="innerHTML">
+    <div class="a-field"><label class="a-label">Title</label><input class="a-input" name="title" required /></div>
+    <div class="a-row a-row-3">
+      <div class="a-field">
+        <label class="a-label">Type</label>
+        <select class="a-select" name="type">
+          <option value="publication">Publication</option>
+          <option value="thesis">Thesis</option>
+          <option value="article">Article</option>
+        </select>
+      </div>
+      <div class="a-field"><label class="a-label">Focus Area</label><input class="a-input" name="focus_area" /></div>
+      <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ items|length + 1 }}" /></div>
+    </div>
+    <div class="a-field"><label class="a-label">Description</label><textarea class="a-textarea" name="description"></textarea></div>
+    <div class="a-form-actions">
+      <button type="submit" class="a-btn a-btn-save">Save</button>
+      <button type="button" class="a-btn a-btn-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+{% for item in items %}
+<div id="res-{{ item.id }}" class="a-card">
+  <div class="a-card-header">
+    <div>
+      <div class="a-card-title">{{ item.title }}</div>
+      <div class="a-card-sub" style="text-transform:capitalize">{{ item.type }} &middot; {{ item.focus_area }}</div>
+    </div>
+    <div class="a-card-actions">
+      <button class="a-btn a-btn-edit" onclick="toggleEdit('res-{{ item.id }}')">Edit</button>
+      <form style="display:inline" hx-post="/admin/section/research/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <div id="edit-res-{{ item.id }}" class="a-edit-form" style="display:none">
+    <form hx-post="/admin/section/research/{{ item.id }}" hx-target="#section-content" hx-swap="innerHTML">
+      <div class="a-field"><label class="a-label">Title</label><input class="a-input" name="title" value="{{ item.title }}" required /></div>
+      <div class="a-row a-row-3">
+        <div class="a-field">
+          <label class="a-label">Type</label>
+          <select class="a-select" name="type">
+            <option value="publication" {% if item.type=='publication' %}selected{% endif %}>Publication</option>
+            <option value="thesis" {% if item.type=='thesis' %}selected{% endif %}>Thesis</option>
+            <option value="article" {% if item.type=='article' %}selected{% endif %}>Article</option>
+          </select>
+        </div>
+        <div class="a-field"><label class="a-label">Focus Area</label><input class="a-input" name="focus_area" value="{{ item.focus_area or '' }}" /></div>
+        <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ item.order }}" /></div>
+      </div>
+      <div class="a-field"><label class="a-label">Description</label><textarea class="a-textarea" name="description">{{ item.description or '' }}</textarea></div>
+      <div class="a-form-actions">
+        <button type="submit" class="a-btn a-btn-save">Save</button>
+        <button type="button" class="a-btn a-btn-cancel" onclick="toggleEdit('res-{{ item.id }}')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+<script>
+function toggleAddForm(){document.getElementById('add-form').classList.toggle('open')}
+function toggleEdit(id){const f=document.getElementById('edit-'+id);f.style.display=f.style.display==='none'?'block':'none'}
+</script>

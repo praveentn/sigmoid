@@ -1,0 +1,83 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} entries</span>
+  <button class="a-btn-add" onclick="toggleAddForm()">+ Add</button>
+</div>
+
+<!-- Add form -->
+<div id="add-form" class="a-add-form">
+  <form hx-post="/admin/section/experience" hx-target="#section-content" hx-swap="innerHTML">
+    <div class="a-row a-row-2">
+      <div class="a-field"><label class="a-label">Company</label><input class="a-input" name="company" required /></div>
+      <div class="a-field"><label class="a-label">Role</label><input class="a-input" name="role" required /></div>
+      <div class="a-field"><label class="a-label">Period Start</label><input class="a-input" name="period_start" placeholder="Oct 2021" /></div>
+      <div class="a-field"><label class="a-label">Period End</label><input class="a-input" name="period_end" placeholder="Present" /></div>
+    </div>
+    <div class="a-field"><label class="a-label">Location</label><input class="a-input" name="location" /></div>
+    <div class="a-field"><label class="a-label">Tagline</label><textarea class="a-textarea" name="tagline" style="min-height:50px"></textarea></div>
+    <div class="a-field"><label class="a-label">Highlights (one per line)</label><textarea class="a-textarea" name="highlights" style="min-height:100px;font-family:var(--font-mono);font-size:.75rem"></textarea></div>
+    <div class="a-row a-row-2">
+      <div class="a-field"><label class="a-checkbox"><input type="checkbox" name="is_current" /><span>Current role</span></label></div>
+      <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ items|length + 1 }}" /></div>
+    </div>
+    <div class="a-form-actions">
+      <button type="submit" class="a-btn a-btn-save">Save</button>
+      <button type="button" class="a-btn a-btn-cancel" onclick="toggleAddForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- List -->
+{% for item in items %}
+<div id="exp-{{ item.id }}" class="a-card">
+  <div class="a-card-header">
+    <div>
+      <div class="a-card-title">
+        {{ item.role }}
+        {% if item.is_current %}<span class="a-badge">CURRENT</span>{% endif %}
+      </div>
+      <div class="a-card-sub">{{ item.company }} &middot; {{ item.period_start }} &mdash; {{ item.period_end }}</div>
+    </div>
+    <div class="a-card-actions">
+      <button class="a-btn a-btn-edit" onclick="toggleEdit('exp-{{ item.id }}')">Edit</button>
+      <form style="display:inline" hx-post="/admin/section/experience/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete this entry?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <!-- Edit form (hidden) -->
+  <div id="edit-exp-{{ item.id }}" class="a-edit-form" style="display:none">
+    <form hx-post="/admin/section/experience/{{ item.id }}" hx-target="#section-content" hx-swap="innerHTML">
+      <div class="a-row a-row-2">
+        <div class="a-field"><label class="a-label">Company</label><input class="a-input" name="company" value="{{ item.company }}" required /></div>
+        <div class="a-field"><label class="a-label">Role</label><input class="a-input" name="role" value="{{ item.role }}" required /></div>
+        <div class="a-field"><label class="a-label">Period Start</label><input class="a-input" name="period_start" value="{{ item.period_start }}" /></div>
+        <div class="a-field"><label class="a-label">Period End</label><input class="a-input" name="period_end" value="{{ item.period_end }}" /></div>
+      </div>
+      <div class="a-field"><label class="a-label">Location</label><input class="a-input" name="location" value="{{ item.location or '' }}" /></div>
+      <div class="a-field"><label class="a-label">Tagline</label><textarea class="a-textarea" name="tagline" style="min-height:50px">{{ item.tagline or '' }}</textarea></div>
+      <div class="a-field"><label class="a-label">Highlights (one per line)</label><textarea class="a-textarea" name="highlights" style="min-height:120px;font-family:var(--font-mono);font-size:.75rem">{{ item.highlights|join('\n') if item.highlights else '' }}</textarea></div>
+      <div class="a-row a-row-2">
+        <div class="a-field"><label class="a-checkbox"><input type="checkbox" name="is_current" {% if item.is_current %}checked{% endif %} /><span>Current role</span></label></div>
+        <div class="a-field"><label class="a-label">Order</label><input class="a-input" name="order" type="number" value="{{ item.order }}" /></div>
+      </div>
+      <div class="a-form-actions">
+        <button type="submit" class="a-btn a-btn-save">Save</button>
+        <button type="button" class="a-btn a-btn-cancel" onclick="toggleEdit('exp-{{ item.id }}')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+function toggleAddForm() {
+  const f = document.getElementById('add-form');
+  f.classList.toggle('open');
+}
+function toggleEdit(id) {
+  const f = document.getElementById('edit-' + id);
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+</script>

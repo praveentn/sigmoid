@@ -11,7 +11,7 @@ import urllib.request
 import json
 
 OLLAMA_BIN = "/app/ollama"
-OLLAMA_URL = "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64"
+OLLAMA_URL = "https://ollama.com/download/ollama-linux-amd64"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,9 +110,10 @@ def start_ollama():
                   f"OLLAMA_MODELS={models_dir} {bin_path} pull <model>")
             # Server is still running — SSH pull can fix this later
 
-    # Expose to FastAPI (even if pull failed — user can SSH pull later)
-    os.environ["OLLAMA_BASE_URL"] = base
-    print(f"[ollama] OLLAMA_BASE_URL={base}")
+    # Expose to FastAPI only if not already set by the environment
+    if not os.environ.get("OLLAMA_BASE_URL"):
+        os.environ["OLLAMA_BASE_URL"] = base
+    print(f"[ollama] OLLAMA_BASE_URL={os.environ['OLLAMA_BASE_URL']}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

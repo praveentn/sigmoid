@@ -842,6 +842,7 @@ async def _call_sigmollm(messages: list, system_prompt: str) -> str:
         base_url=base_url,
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=120,
+        follow_redirects=True,
     ) as client:
         res = await client.post("/api/chat", json={
             "messages": chat_messages,

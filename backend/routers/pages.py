@@ -61,8 +61,7 @@ def index(request: Request, db: Session = Depends(get_db)):
     awards = db.query(Award).order_by(Award.order).all()
     impact = db.query(ImpactMetric).order_by(ImpactMetric.order).all()
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "profile": profile,
         "experience": experience,
         "education": education,
@@ -81,7 +80,7 @@ def index(request: Request, db: Session = Depends(get_db)):
 def admin_login_page(request: Request, admin_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     if get_admin_user(admin_token, db):
         return RedirectResponse("/admin/dashboard", status_code=302)
-    return templates.TemplateResponse("admin/login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request, "admin/login.html", {"error": None})
 
 
 @router.post("/admin/login")
@@ -94,8 +93,8 @@ def admin_login(
     user = db.query(AdminUser).filter(AdminUser.username == username).first()
     if not user or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
-            "admin/login.html",
-            {"request": request, "error": "Invalid username or password"},
+            request, "admin/login.html",
+            {"error": "Invalid username or password"},
             status_code=401,
         )
     token = create_access_token({"sub": username})
@@ -124,8 +123,7 @@ def admin_dashboard(
     if not user:
         return RedirectResponse("/admin", status_code=302)
     ctx = _section_context(section, db)
-    return templates.TemplateResponse("admin/dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "admin/dashboard.html", {
         "user": user,
         "active_section": section,
         **ctx,
@@ -167,7 +165,7 @@ def admin_section(
     if not get_admin_user(admin_token, db):
         return _htmx_auth_error()
     ctx = _section_context(section, db)
-    return templates.TemplateResponse(f"admin/sections/{section}.html", {"request": request, **ctx})
+    return templates.TemplateResponse(request, f"admin/sections/{section}.html", ctx)
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -203,8 +201,8 @@ def save_profile(
         p.years_experience = int(years_experience) if years_experience.isdigit() else p.years_experience
         p.solutions_delivered = int(solutions_delivered) if solutions_delivered.isdigit() else p.solutions_delivered
         db.commit(); db.refresh(p)
-    return templates.TemplateResponse("admin/sections/profile.html", {
-        "request": request, "profile_data": p,
+    return templates.TemplateResponse(request, "admin/sections/profile.html", {
+        "profile_data": p,
         "toast": "Profile saved successfully.",
     })
 
@@ -213,10 +211,10 @@ def save_profile(
 
 def _list_response(request, section, db, editing_id=None, adding=False, toast=None):
     ctx = _section_context(section, db)
-    ctx.update({"request": request, "editing_id": editing_id, "adding": adding})
+    ctx.update({"editing_id": editing_id, "adding": adding})
     if toast:
         ctx["toast"] = toast
-    return templates.TemplateResponse(f"admin/sections/{section}.html", ctx)
+    return templates.TemplateResponse(request, f"admin/sections/{section}.html", ctx)
 
 
 # ── Experience ────────────────────────────────────────────────────────────────

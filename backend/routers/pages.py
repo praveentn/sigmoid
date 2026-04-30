@@ -858,8 +858,7 @@ async def _call_sigmollm(messages: list, system_prompt: str) -> str:
             raise RuntimeError(f"SigmoLLM unreachable: {e}") from e
 
         res = await client.post("/api/chat", json={
-            "system": system_prompt,
-            "messages": chat_messages,
+            "messages": [{"role": "system", "content": system_prompt}] + chat_messages,
             "options": {"temperature": 0.7, "num_predict": 600},
         })
         if not res.is_success:

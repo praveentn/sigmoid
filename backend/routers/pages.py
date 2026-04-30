@@ -821,8 +821,7 @@ async def _call_gemini(messages: list, system_prompt: str) -> str:
 
 async def _call_ollama(messages: list, system_prompt: str) -> str:
     """Fallback to local Ollama instance when Gemini is unavailable."""
-    import json as _json
-    import urllib.request as _urlreq
+    import ollama as _ollama
 
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     model = os.getenv("OLLAMA_MODEL", "phi3:mini")
@@ -830,13 +829,13 @@ async def _call_ollama(messages: list, system_prompt: str) -> str:
         {"role": m.get("role", "user"), "content": m.get("content", "")}
         for m in messages
     ]
-    payload = _json.dumps({"model": model, "messages": ollama_msgs, "stream": False,
-                           "options": {"temperature": 0.7, "num_predict": 600}}).encode()
-    req = _urlreq.Request(f"{base_url}/api/chat", data=payload,
-                          headers={"Content-Type": "application/json"})
-    with _urlreq.urlopen(req, timeout=25) as r:
-        data = _json.loads(r.read())
-    return data.get("message", {}).get("content", "").strip()
+    client = _ollama.AsyncClient(host=base_url)
+    resp = await client.chat(
+        model=model,
+        messages=ollama_msgs,
+        options={"temperature": 0.7, "num_predict": 600},
+    )
+    return resp.message.content.strip()
 
 
 @router.post("/api/chat")

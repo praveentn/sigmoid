@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #fafafa;
+    color: #0a0a0a;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background-color: #0a0a0a;
+    color: #fafafa;
+  }
+}
+
+@layer components {
+  .section-container {
+    @apply max-w-6xl mx-auto px-6 md:px-12;
+  }
+
+  .section-label {
+    @apply text-xs font-mono font-medium tracking-[0.2em] uppercase text-silver mb-3;
+  }
+
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-ink tracking-tight;
+  }
+
+  .divider {
+    @apply border-t border-cloud;
+  }
+
+  .tag {
+    @apply inline-block text-xs font-mono font-medium px-2.5 py-1 border border-cloud bg-fog text-graphite tracking-wide;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 bg-ink text-snow px-5 py-2.5 text-sm font-medium tracking-wide
+           hover:bg-ink-mid transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 border border-ink text-ink px-5 py-2.5 text-sm font-medium tracking-wide
+           hover:bg-ink hover:text-snow transition-colors duration-200;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-1.5 text-sm text-silver hover:text-ink transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-white border border-cloud hover:border-mist transition-colors duration-200;
+  }
+
+  .admin-input {
+    @apply w-full border border-cloud bg-white px-3 py-2 text-sm text-ink
+           focus:outline-none focus:border-ink transition-colors duration-150;
+  }
+
+  .admin-label {
+    @apply block text-xs font-medium text-graphite mb-1 tracking-wide uppercase;
+  }
+}
+
+/* Scroll fade-in animation */
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.animate-on-scroll.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Timeline connector */
+.timeline-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, #e8e8e8 10%, #e8e8e8 90%, transparent);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fafafa;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cccccc;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aaaaaa;
+}
+
+/* Admin panel */
+.admin-sidebar-link {
+  @apply flex items-center gap-3 px-4 py-2.5 text-sm text-silver hover:text-snow hover:bg-ink-muted
+         transition-colors duration-150 cursor-pointer;
+}
+
+.admin-sidebar-link.active {
+  @apply text-snow bg-ink-muted border-l-2 border-white;
+}

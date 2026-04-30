@@ -1,8 +1,11 @@
 [phases.setup]
-nixPkgs = ["python312"]
+nixPkgs = ["python312", "curl", "bash"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = [
+  "pip install -r requirements.txt",
+  "curl -fsSL https://ollama.com/install.sh | sh || true"
+]
 
 [start]
 cmd = "python run.py"

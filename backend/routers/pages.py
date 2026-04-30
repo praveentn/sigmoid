@@ -875,16 +875,24 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             reply = await _call_gemini(messages, system_prompt)
         except Exception as e:
             gemini_err = e
+            print(f"[gemini] error: {e}")
 
     # Fallback to Ollama
+    ollama_err = None
     if not reply and os.getenv("OLLAMA_BASE_URL"):
         try:
             reply = await _call_ollama(messages, system_prompt)
-        except Exception:
-            pass  # both failed
+        except Exception as e:
+            ollama_err = e
+            print(f"[ollama] fallback error: {e}")
 
     if not reply:
-        err_key = _classify_error(gemini_err) if gemini_err else "general"
+        # If Ollama was available but also failed, show a generic error
+        # rather than echoing the Gemini quota message
+        if ollama_err is not None:
+            err_key = "general"
+        else:
+            err_key = _classify_error(gemini_err) if gemini_err else "general"
         return JSONResponse({"error": _USER_ERRORS[err_key], "remaining": remaining}, status_code=503)
 
     return JSONResponse({"reply": reply, "remaining": remaining, "blocked": False})

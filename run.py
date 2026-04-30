@@ -3,43 +3,43 @@ Railway entry point.
 Starts Ollama (if available) then the FastAPI app with uvicorn.
 """
 import os
+import shutil
 import subprocess
 import time
 import urllib.request
-import urllib.error
 import json
 
 
 # ── Ollama setup ──────────────────────────────────────────────────────────────
 
-def _ollama_ready(base: str, timeout: int = 60) -> bool:
-    """Wait until Ollama HTTP server is accepting requests."""
+def _ollama_ready(base: str, timeout: int = 90) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             urllib.request.urlopen(f"{base}/api/tags", timeout=2)
             return True
         except Exception:
-            time.sleep(1)
+            time.sleep(2)
     return False
 
 
 def _model_pulled(base: str, model: str) -> bool:
-    """Return True if model already exists in the Ollama library."""
     try:
         with urllib.request.urlopen(f"{base}/api/tags", timeout=5) as r:
             data = json.loads(r.read())
         names = [m.get("name", "") for m in data.get("models", [])]
-        return any(model in n for n in names)
+        return any(model.split(":")[0] in n for n in names)
     except Exception:
         return False
 
 
 def start_ollama():
-    ollama_bin = "/usr/local/bin/ollama"
-    if not os.path.exists(ollama_bin):
-        print("[ollama] binary not found — skipping Ollama setup")
+    ollama_bin = shutil.which("ollama")
+    if not ollama_bin:
+        print("[ollama] binary not found in PATH — skipping Ollama setup")
         return
+
+    print(f"[ollama] found binary at {ollama_bin}")
 
     models_dir = os.getenv("OLLAMA_MODELS", "/models")
     model = os.getenv("OLLAMA_MODEL", "phi3:mini")
@@ -47,9 +47,9 @@ def start_ollama():
 
     env = os.environ.copy()
     env["OLLAMA_MODELS"] = models_dir
-    env["OLLAMA_HOST"] = "0.0.0.0"
+    env["OLLAMA_HOST"] = "127.0.0.1:11434"
 
-    print(f"[ollama] starting server (models dir: {models_dir})")
+    print(f"[ollama] starting server (OLLAMA_MODELS={models_dir})")
     subprocess.Popen(
         [ollama_bin, "serve"],
         env=env,
@@ -57,16 +57,16 @@ def start_ollama():
         stderr=subprocess.DEVNULL,
     )
 
-    if not _ollama_ready(base, timeout=60):
-        print("[ollama] server did not become ready in time — skipping")
+    if not _ollama_ready(base, timeout=90):
+        print("[ollama] server did not become ready — skipping")
         return
 
-    print("[ollama] server ready")
+    print("[ollama] server is ready")
 
     if _model_pulled(base, model):
         print(f"[ollama] model '{model}' already cached in {models_dir}")
     else:
-        print(f"[ollama] pulling '{model}' to {models_dir} — may take a few minutes on first boot")
+        print(f"[ollama] pulling '{model}' into {models_dir} (first boot — may take a few minutes)")
         result = subprocess.run(
             [ollama_bin, "pull", model],
             env=env,
@@ -74,11 +74,12 @@ def start_ollama():
             text=True,
         )
         if result.returncode == 0:
-            print(f"[ollama] model '{model}' pulled successfully")
+            print(f"[ollama] '{model}' pulled successfully")
         else:
-            print(f"[ollama] pull failed: {result.stderr[:300]}")
+            print(f"[ollama] pull failed (rc={result.returncode}): {result.stderr[:400]}")
             return
 
+    # Expose to the FastAPI app (overrides any pre-set env var)
     os.environ["OLLAMA_BASE_URL"] = base
     print(f"[ollama] OLLAMA_BASE_URL={base}")
 

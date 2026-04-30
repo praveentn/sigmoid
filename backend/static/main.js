@@ -238,11 +238,12 @@ searchInput?.addEventListener('input', e => runSearch(e.target.value));
 // ── SIGMA chat ────────────────────────────────────────────────
 const sigmaTrigger = document.getElementById('sigmaTrigger');
 const sigmaOverlay = document.getElementById('sigmaOverlay');
-const sigmaClose = document.getElementById('sigmaClose');
+const sigmaClose   = document.getElementById('sigmaClose');
 const sigmaMessages = document.getElementById('sigmaMessages');
-const sigmaInput = document.getElementById('sigmaInput');
-const sigmaSend = document.getElementById('sigmaSend');
-const sigmaLimit = document.getElementById('sigmaLimit');
+const sigmaInput   = document.getElementById('sigmaInput');
+const sigmaSend    = document.getElementById('sigmaSend');
+const sigmaStop    = document.getElementById('sigmaStop');
+const sigmaLimit   = document.getElementById('sigmaLimit');
 
 let sigmaSessionId = sessionStorage.getItem('sigma_session') || (() => {
   const id = 'sess_' + Math.random().toString(36).slice(2);
@@ -250,9 +251,11 @@ let sigmaSessionId = sessionStorage.getItem('sigma_session') || (() => {
   return id;
 })();
 
-let sigmaHistory = []; // {role, content}
+let sigmaHistory   = [];
 let sigmaRemaining = 20;
-let sigmaTyping = false;
+let sigmaActive    = false;       // true while fetching or typing
+let sigmaAbort     = null;        // AbortController
+let sigmaStopType  = false;       // signal to stop typewriter mid-run
 
 function openSigma() {
   sigmaOverlay?.classList.add('open');
@@ -283,14 +286,27 @@ sigmaInput?.addEventListener('input', () => {
   sigmaInput.style.height = 'auto';
   sigmaInput.style.height = Math.min(sigmaInput.scrollHeight, 120) + 'px';
 });
-
 sigmaInput?.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendSigmaMessage(); }
 });
 sigmaSend?.addEventListener('click', sendSigmaMessage);
 
-function addMessage(role, text) {
-  if (!sigmaMessages) return;
+// Stop button — abort fetch or halt typewriter
+sigmaStop?.addEventListener('click', () => {
+  sigmaStopType = true;
+  sigmaAbort?.abort();
+  setGenerating(false);
+});
+
+function setGenerating(on) {
+  sigmaActive = on;
+  if (sigmaSend) sigmaSend.style.display = on ? 'none' : 'flex';
+  if (sigmaStop) sigmaStop.style.display = on ? 'flex' : 'none';
+  if (sigmaInput) sigmaInput.disabled = on;
+}
+
+function addMessage(role) {
+  if (!sigmaMessages) return null;
   const div = document.createElement('div');
   div.className = `sigma-msg sigma-msg--${role === 'user' ? 'user' : 'agent'}`;
   const badge = document.createElement('div');
@@ -305,14 +321,20 @@ function addMessage(role, text) {
   return textDiv;
 }
 
-function typeText(el, text, speed = 18) {
+function typeText(el, text, speed = 16) {
+  sigmaStopType = false;
   return new Promise(resolve => {
-    let i = 0;
     const chars = [...text];
-    const timer = setInterval(() => {
+    let i = 0;
+    const tick = setInterval(() => {
+      if (sigmaStopType) {
+        clearInterval(tick);
+        resolve();
+        return;
+      }
       el.textContent += chars[i++] || '';
       sigmaMessages.scrollTop = sigmaMessages.scrollHeight;
-      if (i >= chars.length) { clearInterval(timer); resolve(); }
+      if (i >= chars.length) { clearInterval(tick); resolve(); }
     }, speed);
   });
 }
@@ -320,7 +342,7 @@ function typeText(el, text, speed = 18) {
 function showTyping() {
   const div = document.createElement('div');
   div.className = 'sigma-msg sigma-msg--agent';
-  div.id = 'sigma-typing-indicator';
+  div.id = 'sigma-typing-ind';
   const badge = document.createElement('div');
   badge.className = 'sigma-msg-badge';
   badge.textContent = 'SIGMA';
@@ -333,59 +355,63 @@ function showTyping() {
   sigmaMessages.scrollTop = sigmaMessages.scrollHeight;
 }
 function hideTyping() {
-  document.getElementById('sigma-typing-indicator')?.remove();
+  document.getElementById('sigma-typing-ind')?.remove();
 }
 
 async function sendSigmaMessage() {
   const text = sigmaInput?.value.trim();
-  if (!text || sigmaTyping) return;
+  if (!text || sigmaActive) return;
 
   sigmaInput.value = '';
   sigmaInput.style.height = 'auto';
 
-  // Add user message
-  const userEl = addMessage('user', text);
+  const userEl = addMessage('user');
   if (userEl) userEl.textContent = text;
   sigmaHistory.push({ role: 'user', content: text });
 
   if (sigmaRemaining <= 0) {
-    const el = addMessage('agent', '');
-    if (el) await typeText(el, "You've reached the query limit for this session. Please come back later.", 20);
+    const el = addMessage('agent');
+    if (el) await typeText(el, "You've reached today's query limit. Please come back later.");
     return;
   }
 
-  sigmaTyping = true;
-  if (sigmaSend) sigmaSend.disabled = true;
+  setGenerating(true);
   showTyping();
+  sigmaAbort = new AbortController();
 
+  let reply = '';
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
+      signal: sigmaAbort.signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: sigmaHistory, session_id: sigmaSessionId }),
     });
     const data = await res.json();
-    hideTyping();
 
     if (data.remaining !== undefined) {
       sigmaRemaining = data.remaining;
-      if (sigmaLimit) sigmaLimit.textContent = `${sigmaRemaining} quer${sigmaRemaining === 1 ? 'y' : 'ies'} remaining`;
+      if (sigmaLimit) sigmaLimit.textContent =
+        `${sigmaRemaining} quer${sigmaRemaining === 1 ? 'y' : 'ies'} remaining`;
     }
-
-    const reply = data.reply || data.error || 'Something went wrong. Please try again.';
-    const agentEl = addMessage('agent', '');
-    if (agentEl) await typeText(agentEl, reply, 16);
-    sigmaHistory.push({ role: 'model', content: reply });
-
-    // Keep history to last 10 turns for context management
-    if (sigmaHistory.length > 20) sigmaHistory = sigmaHistory.slice(-20);
+    reply = data.reply || data.error || 'Something went wrong. Please try again.';
   } catch (err) {
-    hideTyping();
-    const el = addMessage('agent', '');
-    if (el) await typeText(el, 'Connection error. Please try again.', 20);
-  } finally {
-    sigmaTyping = false;
-    if (sigmaSend) sigmaSend.disabled = false;
-    sigmaInput?.focus();
+    if (err.name === 'AbortError') {
+      reply = ''; // user stopped — don't show anything
+    } else {
+      reply = 'Connection error. Please try again.';
+    }
   }
+
+  hideTyping();
+  setGenerating(false);
+
+  if (reply) {
+    const agentEl = addMessage('agent');
+    if (agentEl) await typeText(agentEl, reply);
+    sigmaHistory.push({ role: 'model', content: reply });
+    if (sigmaHistory.length > 20) sigmaHistory = sigmaHistory.slice(-20);
+  }
+
+  sigmaInput?.focus();
 }

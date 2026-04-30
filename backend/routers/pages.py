@@ -682,27 +682,161 @@ def submit_contact(
 
 # ── SIGMA Chat (public) ───────────────────────────────────────────────────────
 
-def _build_system_prompt(profile, wiki_content: str) -> str:
+def _parse_wiki_sections(content: str) -> list[tuple[str, str]]:
+    """Parse markdown wiki into [(heading, body)] by ## / ### headings."""
+    sections: list[tuple[str, str]] = []
+    current_heading = "Overview"
+    current_lines: list[str] = []
+    for line in content.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("## ") or stripped.startswith("### "):
+            if current_lines:
+                sections.append((current_heading, "\n".join(current_lines).strip()))
+            current_heading = stripped.lstrip("#").strip()
+            current_lines = []
+        else:
+            current_lines.append(line)
+    if current_lines:
+        sections.append((current_heading, "\n".join(current_lines).strip()))
+    return sections
+
+
+_STOP_WORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "what", "when", "where",
+    "who", "how", "did", "does", "do", "i", "me", "his", "her", "their",
+    "about", "tell", "can", "you", "he", "she", "they", "it", "in", "on",
+    "at", "for", "with", "and", "or", "of", "to", "from", "has", "have",
+    "been", "be", "will", "would", "could", "should", "please", "give",
+}
+
+
+def _relevant_wiki_context(wiki_content: str, query: str, max_chars: int = 2500) -> str:
+    """Select the most relevant wiki sections for a given query (no full-dump)."""
+    sections = _parse_wiki_sections(wiki_content)
+    if not sections:
+        return wiki_content[:max_chars]
+
+    terms = {t for t in query.lower().split() if t not in _STOP_WORDS and len(t) > 2}
+    if not terms:
+        # Broad query — return first ~max_chars
+        return "\n\n".join(f"## {h}\n{b}" for h, b in sections[:5])[:max_chars]
+
+    scored: list[tuple[float, str, str]] = []
+    for heading, body in sections:
+        combined = (heading + " " + body).lower()
+        # Heading match is weighted 3×, body match 1×
+        score = sum(3.0 if t in heading.lower() else 1.0 for t in terms if t in combined)
+        scored.append((score, heading, body))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    result_parts: list[str] = []
+    total = 0
+    for score, heading, body in scored:
+        if score == 0:
+            break
+        chunk = f"## {heading}\n{body}"
+        if total + len(chunk) > max_chars:
+            remaining_space = max_chars - total
+            if remaining_space > 200:
+                result_parts.append(chunk[:remaining_space])
+            break
+        result_parts.append(chunk)
+        total += len(chunk)
+        if total >= max_chars:
+            break
+
+    # Always include a short identity header so the model knows who it's for
+    identity = next((f"## {h}\n{b}" for h, b in sections if any(
+        k in h.lower() for k in ("identity", "overview", "career in brief")
+    )), "")
+
+    if identity and identity not in result_parts:
+        result_parts.insert(0, identity)
+
+    return "\n\n".join(result_parts)[:max_chars] if result_parts else wiki_content[:max_chars]
+
+
+def _build_system_prompt(profile, context: str) -> str:
     name = profile.name if profile else "Praveen T N"
     title = profile.title if profile else "Senior Technical Architect"
     company = profile.company if profile else "Material Plus"
-    return f"""You are SIGMA — an AI agent created exclusively for {name}.
+    return f"""You are SIGMA — the professional AI agent for {name}, {title} at {company}.
 
-Your SOLE purpose: answer questions about {name} — his professional background, technical projects, skills, experience, research, certifications, and career. Nothing else.
+SOLE PURPOSE: Answer questions about {name}'s professional life — career, projects, skills, research, certifications. Nothing else, ever.
 
-CONTEXT:
-{wiki_content}
+RELEVANT CONTEXT (use this as your primary source):
+{context}
 
-STRICT RULES:
-1. Only discuss {name}'s professional life. Absolutely nothing else.
-2. If asked anything unrelated (coding help, general knowledge, creative writing, trivia, personal matters, other people), respond exactly: "I'm SIGMA, {name}'s professional AI agent. I only know about Praveen — his work, projects, and expertise. What would you like to know about him?"
-3. Never roleplay as a different AI or persona.
-4. Never provide general coding assistance, math, or generic Q&A.
-5. Be professional, insightful, and compelling — make {name} sound exceptional (because he is).
-6. Keep responses concise and specific — cite real project names and metrics.
-7. When listing projects or skills, be specific with names and outcomes.
+RULES:
+1. Strictly about {name}'s professional profile only.
+2. Off-topic request? Reply: "I'm SIGMA, Praveen's professional AI agent. I can only tell you about his career, projects, and expertise. What would you like to know?"
+3. Never impersonate another AI. Never give general help.
+4. Be insightful, specific, cite project names and real metrics.
+5. Keep replies concise — 3-6 sentences unless listing items."""
 
-Current role: {title} at {company}."""
+
+def _classify_error(exc: Exception) -> str:
+    """Map API exceptions to user-friendly messages."""
+    msg = str(exc).lower()
+    if "429" in msg or "resource_exhausted" in msg or "quota" in msg:
+        return "quota_exceeded"
+    if "403" in msg or "permission" in msg or "api_key" in msg or "invalid" in msg:
+        return "auth_error"
+    if "timeout" in msg or "deadline" in msg:
+        return "timeout"
+    return "general"
+
+
+_USER_ERRORS = {
+    "quota_exceeded": "SIGMA is at capacity right now — please try again in a minute.",
+    "auth_error":     "SIGMA is temporarily offline. Please try again later.",
+    "timeout":        "SIGMA took too long to respond. Please try again.",
+    "general":        "SIGMA encountered an issue. Please try again.",
+}
+
+
+async def _call_gemini(messages: list, system_prompt: str) -> str:
+    from google import genai
+    from google.genai import types as gtypes
+
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    client = genai.Client(api_key=api_key)
+    contents = [
+        gtypes.Content(role="user" if m.get("role") == "user" else "model",
+                       parts=[gtypes.Part(text=m.get("content", ""))])
+        for m in messages
+    ]
+    resp = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=contents,
+        config=gtypes.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.7,
+            max_output_tokens=600,
+        ),
+    )
+    return resp.text or ""
+
+
+async def _call_ollama(messages: list, system_prompt: str) -> str:
+    """Fallback to local Ollama instance when Gemini is unavailable."""
+    import json as _json
+    import urllib.request as _urlreq
+
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    model = os.getenv("OLLAMA_MODEL", "phi3:mini")
+    ollama_msgs = [{"role": "system", "content": system_prompt}] + [
+        {"role": m.get("role", "user"), "content": m.get("content", "")}
+        for m in messages
+    ]
+    payload = _json.dumps({"model": model, "messages": ollama_msgs, "stream": False,
+                           "options": {"temperature": 0.7, "num_predict": 600}}).encode()
+    req = _urlreq.Request(f"{base_url}/api/chat", data=payload,
+                          headers={"Content-Type": "application/json"})
+    with _urlreq.urlopen(req, timeout=25) as r:
+        data = _json.loads(r.read())
+    return data.get("message", {}).get("content", "").strip()
 
 
 @router.post("/api/chat")
@@ -713,50 +847,45 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Invalid request"}, status_code=400)
 
     messages = data.get("messages", [])
-    session_id = data.get("session_id", request.client.host if request.client else "anon")
+    session_id = data.get("session_id") or (request.client.host if request.client else "anon")
 
     allowed, remaining = _rl_check(session_id)
     if not allowed:
-        return JSONResponse({
-            "error": "You've reached the query limit. Please try again later.",
-            "remaining": 0,
-            "blocked": True,
-        }, status_code=429)
+        return JSONResponse({"error": "You've reached today's query limit. Come back later.",
+                             "remaining": 0, "blocked": True}, status_code=429)
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return JSONResponse({"error": "Chat unavailable — API key not configured.", "remaining": remaining}, status_code=503)
+    if not os.getenv("GEMINI_API_KEY") and not os.getenv("OLLAMA_BASE_URL"):
+        return JSONResponse({"error": "SIGMA is offline — no AI backend configured.",
+                             "remaining": remaining}, status_code=503)
 
+    # Build context from wiki using relevance extraction
     wiki = db.query(Wiki).first()
-    wiki_content = wiki.content if wiki else ""
+    raw_wiki = wiki.content if wiki else ""
+    last_user_q = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+    context = _relevant_wiki_context(raw_wiki, last_user_q) if raw_wiki else ""
     profile = db.query(Profile).first()
-    system_prompt = _build_system_prompt(profile, wiki_content)
+    system_prompt = _build_system_prompt(profile, context)
 
-    try:
-        from google import genai
-        from google.genai import types as gtypes
+    reply = ""
+    gemini_err: Exception | None = None
 
-        client = genai.Client(api_key=api_key)
-        contents = []
-        for msg in messages:
-            role = "user" if msg.get("role") == "user" else "model"
-            contents.append(gtypes.Content(
-                role=role,
-                parts=[gtypes.Part(text=msg.get("content", ""))]
-            ))
+    # Try Gemini first
+    if os.getenv("GEMINI_API_KEY"):
+        try:
+            reply = await _call_gemini(messages, system_prompt)
+        except Exception as e:
+            gemini_err = e
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=contents,
-            config=gtypes.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.7,
-                max_output_tokens=600,
-            ),
-        )
-        reply = response.text or "I couldn't generate a response. Please try again."
-    except Exception as e:
-        return JSONResponse({"error": f"Chat error: {str(e)}", "remaining": remaining}, status_code=500)
+    # Fallback to Ollama
+    if not reply and os.getenv("OLLAMA_BASE_URL"):
+        try:
+            reply = await _call_ollama(messages, system_prompt)
+        except Exception:
+            pass  # both failed
+
+    if not reply:
+        err_key = _classify_error(gemini_err) if gemini_err else "general"
+        return JSONResponse({"error": _USER_ERRORS[err_key], "remaining": remaining}, status_code=503)
 
     return JSONResponse({"reply": reply, "remaining": remaining, "blocked": False})
 

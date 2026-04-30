@@ -780,6 +780,15 @@ h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -0.02em; font-weight: 800; }
 .sigma-send:hover { background: var(--fog); }
 .sigma-send:disabled { background: rgba(255,255,255,.15); color: rgba(255,255,255,.3); cursor: not-allowed; }
 
+/* Stop generation button */
+.sigma-stop {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.6); transition: all .15s;
+}
+.sigma-stop:hover { background: rgba(255,80,80,.25); border-color: rgba(255,80,80,.4); color: #ff6b6b; }
+
 /* ============================================================
    Admin styles
    ============================================================ */

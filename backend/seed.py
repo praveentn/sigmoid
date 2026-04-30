@@ -618,60 +618,47 @@ SEED_WIKI = """# Praveen T N — Professional Wiki (SIGMA Knowledge Base)
 
 
 def run_seed(db):
-    """Seed the database with Praveen's data if it's empty."""
+    """Seed the database. Safe to re-run — uses upsert logic for most tables."""
 
     # Admin user
     if not db.query(AdminUser).first():
         admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
         db.add(AdminUser(username="admin", password_hash=hash_password(admin_password)))
-        print(f"[seed] Created admin user (password from ADMIN_PASSWORD env var)")
+        print("[seed] Created admin user.")
 
-    if db.query(Profile).first():
-        print("[seed] Data already seeded, skipping.")
-        return
+    # First-time full seed
+    if not db.query(Profile).first():
+        db.add(Profile(**SEED_PROFILE))
+        for item in SEED_EXPERIENCE:
+            db.add(Experience(**item))
+        for item in SEED_EDUCATION:
+            db.add(Education(**item))
+        for item in SEED_SKILLS:
+            db.add(Skill(**item))
+        for item in SEED_CERTIFICATIONS:
+            db.add(Certification(**item))
+        for item in SEED_RESEARCH:
+            db.add(Research(**item))
+        for item in SEED_AWARDS:
+            db.add(Award(**item))
+        for item in SEED_IMPACT_METRICS:
+            db.add(ImpactMetric(**{k: v for k, v in item.items() if k != "is_dynamic_yoe"}))
+        db.commit()
+        print("[seed] Database seeded with Praveen T N's profile data.")
 
-    # Profile
-    db.add(Profile(**SEED_PROFILE))
-
-    # Experience
-    for item in SEED_EXPERIENCE:
-        db.add(Experience(**item))
-
-    # Education
-    for item in SEED_EDUCATION:
-        db.add(Education(**item))
-
-    # Skills
-    for item in SEED_SKILLS:
-        db.add(Skill(**item))
-
-    # Certifications
-    for item in SEED_CERTIFICATIONS:
-        db.add(Certification(**item))
-
-    # Projects
+    # Incremental project sync — add any missing projects by name
+    existing_names = {p.name for p in db.query(Project.name).all()}
+    new_count = 0
     for item in SEED_PROJECTS:
-        db.add(Project(**item))
+        if item["name"] not in existing_names:
+            db.add(Project(**item))
+            new_count += 1
+    if new_count:
+        db.commit()
+        print(f"[seed] Added {new_count} new project(s).")
 
-    # Research
-    for item in SEED_RESEARCH:
-        db.add(Research(**item))
-
-    # Awards
-    for item in SEED_AWARDS:
-        db.add(Award(**item))
-
-    # Impact Metrics
-    for item in SEED_IMPACT_METRICS:
-        item_data = {k: v for k, v in item.items() if k != "is_dynamic_yoe"}
-        db.add(ImpactMetric(**item_data))
-
-    db.commit()
-    print("[seed] Database seeded with Praveen T N's profile data.")
-
-    # Wiki (always seed/update)
-    wiki = db.query(Wiki).first()
-    if not wiki:
+    # Wiki — create if missing (admin can edit after)
+    if not db.query(Wiki).first():
         db.add(Wiki(content=SEED_WIKI))
         db.commit()
         print("[seed] Wiki seeded.")

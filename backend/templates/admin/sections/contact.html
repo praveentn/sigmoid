@@ -1,0 +1,38 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">{{ items|length }} submission{{ 's' if items|length != 1 else '' }}</span>
+  {% set unread = items|selectattr('is_read', 'equalto', false)|list|length %}
+  {% if unread > 0 %}
+  <span style="font-family:var(--font-mono);font-size:.62rem;background:#e74c3c;color:white;padding:.15rem .5rem;">{{ unread }} unread</span>
+  {% endif %}
+</div>
+{% if not items %}
+<div style="padding:3rem 1rem;text-align:center;font-family:var(--font-mono);font-size:.72rem;color:rgba(255,255,255,.2);">
+  No contact submissions yet.
+</div>
+{% endif %}
+{% for item in items %}
+<div id="msg-{{ item.id }}" class="a-card" style="{% if not item.is_read %}border-color:#333{% endif %}">
+  <div class="a-card-header">
+    <div style="flex:1">
+      <div class="a-card-title" style="display:flex;align-items:center;gap:.6rem">
+        {{ item.name }}
+        {% if not item.is_read %}<span style="font-family:var(--font-mono);font-size:.58rem;background:rgba(255,255,255,.12);padding:.1rem .4rem;color:rgba(255,255,255,.7)">UNREAD</span>{% endif %}
+      </div>
+      <div class="a-card-sub">{{ item.email }} {% if item.subject %}&middot; {{ item.subject }}{% endif %}</div>
+      <div style="font-size:.65rem;font-family:var(--font-mono);color:rgba(255,255,255,.2);margin-top:.2rem">{{ item.submitted_at.strftime('%d %b %Y, %H:%M') if item.submitted_at else '' }}</div>
+    </div>
+    <div class="a-card-actions">
+      {% if not item.is_read %}
+      <form style="display:inline" hx-post="/admin/section/contact/{{ item.id }}/read" hx-target="#section-content" hx-swap="innerHTML">
+        <button type="submit" class="a-btn a-btn-edit">Mark Read</button>
+      </form>
+      {% endif %}
+      <form style="display:inline" hx-post="/admin/section/contact/{{ item.id }}/delete" hx-target="#section-content" hx-swap="innerHTML" hx-confirm="Delete this message?">
+        <button type="submit" class="a-btn a-btn-delete">Delete</button>
+      </form>
+    </div>
+  </div>
+  <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #2a2a2a;font-size:.82rem;color:rgba(255,255,255,.6);line-height:1.7;white-space:pre-wrap">{{ item.message }}</div>
+</div>
+{% endfor %}

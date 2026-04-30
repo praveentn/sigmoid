@@ -2,7 +2,7 @@
 
 {% block body %}
 
-<!-- ── Header ─────────────────────────────────────────────── -->
+<!-- ── Header ──────────────────────────────────────────────────── -->
 <header class="site-header">
   <div class="container">
     <a href="#" class="header-logo">
@@ -15,14 +15,17 @@
       <a href="#projects">Work</a>
       <a href="#education">Education</a>
       <a href="#research">Research</a>
-      {% if profile %}
-      <a href="mailto:{{ profile.email }}" class="header-cta">Contact</a>
-      {% endif %}
+      <a href="#contact">Contact</a>
     </nav>
+    <div class="header-actions">
+      <button class="search-trigger" id="searchTrigger" aria-label="Search" title="Search (Ctrl+K)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
   </div>
 </header>
 
-<!-- ── Hero ───────────────────────────────────────────────── -->
+<!-- ── Hero ────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="hero-grid"></div>
   <div class="container hero-content">
@@ -30,11 +33,7 @@
       <span>{{ profile.company if profile else 'Material Plus' }} &mdash; {{ profile.location if profile else 'Bengaluru, India' }}</span>
     </div>
     {% if profile %}
-    <h1>
-      {% for word in profile.name.split(' ') %}
-      <span class="hero-title-line">{{ word }}</span>
-      {% endfor %}
-    </h1>
+    <h1>{{ profile.name }}</h1>
     <div class="hero-role">
       <p>{{ profile.title }}</p>
     </div>
@@ -46,9 +45,7 @@
       </a>
       {% endif %}
       <a href="#experience" class="btn-outline-light">View Career</a>
-      {% if profile.email %}
-      <a href="mailto:{{ profile.email }}" class="hero-email">{{ profile.email }}</a>
-      {% endif %}
+      <a href="#contact" class="btn-outline-light">Get in Touch</a>
     </div>
     {% endif %}
   </div>
@@ -59,13 +56,13 @@
   <div class="hero-gradient"></div>
 </section>
 
-<!-- ── Impact Strip ───────────────────────────────────────── -->
+<!-- ── Impact Strip ──────────────────────────────────────────── -->
 {% if impact %}
 <div class="impact-strip">
   <div class="impact-grid">
     {% for m in impact %}
     <div class="impact-cell">
-      <span class="impact-metric" data-target="{{ m.metric }}">{{ m.metric }}</span>
+      <span class="impact-metric" data-target="{{ m.metric }}" {% if 'Years' in m.label %}data-yoe-live{% endif %}>{{ m.metric }}</span>
       <span class="impact-label">{{ m.label }}</span>
       {% if m.description %}
       <p class="impact-desc">{{ m.description }}</p>
@@ -76,7 +73,7 @@
 </div>
 {% endif %}
 
-<!-- ── About ──────────────────────────────────────────────── -->
+<!-- ── About ────────────────────────────────────────────────── -->
 <section id="about" class="section section--white">
   <div class="container">
     <div class="about-grid">
@@ -98,9 +95,6 @@
           {% if profile and profile.credly_url %}
           <a href="{{ profile.credly_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Credly Badges</a>
           {% endif %}
-          {% if profile and profile.email %}
-          <a href="mailto:{{ profile.email }}" class="btn-ghost">{{ profile.email }}</a>
-          {% endif %}
         </div>
       </div>
 
@@ -120,12 +114,15 @@
           <div class="profile-meta">
             {% for key, val in [
               ('Location', profile.location),
-              ('Phone', profile.phone),
-              ('Experience', (profile.years_experience|string + '+ years') if profile.years_experience else None),
+              ('Experience', None),
               ('AI Solutions', (profile.solutions_delivered|string + '+ delivered') if profile.solutions_delivered else None),
-              ('Travel', profile.visa_info)
             ] %}
-            {% if val %}
+            {% if key == 'Experience' %}
+            <div class="profile-meta-row">
+              <span class="meta-key">Experience</span>
+              <span class="meta-val"><span data-yoe-live-inline></span> years</span>
+            </div>
+            {% elif val %}
             <div class="profile-meta-row">
               <span class="meta-key">{{ key }}</span>
               <span class="meta-val">{{ val }}</span>
@@ -165,7 +162,7 @@
         <div class="exp-sidebar-inner">
           <span class="label">Career</span>
           <h2 style="font-size:clamp(1.8rem,4vw,2.4rem);">Professional<br><span style="color:var(--silver)">Experience</span></h2>
-          <p>{{ experience|length }} roles across 6 organisations. 16+ years from web engineering to enterprise AI architecture.</p>
+          <p>{{ experience|length }} roles across 6 organisations. <span data-yoe-live-inline></span> years from web engineering to enterprise AI architecture.</p>
           <div class="exp-index">
             {% for item in experience %}
             <span class="exp-index-item">{{ item.period_start.split(' ')[-1] if item.period_start else '' }} · {{ item.company.split(' ')[0] }}</span>
@@ -238,20 +235,39 @@
       <h2>Enterprise AI <span>Solutions</span></h2>
     </div>
 
-    {# Collect unique categories #}
+    {# Collect unique categories and companies #}
     {% set cats = [] %}
-    {% for p in projects %}{% if p.category and p.category not in cats %}{% set _ = cats.append(p.category) %}{% endif %}{% endfor %}
+    {% set companies = [] %}
+    {% for p in projects %}
+      {% if p.category and p.category not in cats %}{% set _ = cats.append(p.category) %}{% endif %}
+      {% if p.company and p.company not in companies %}{% set _ = companies.append(p.company) %}{% endif %}
+    {% endfor %}
 
-    <div class="projects-filter reveal">
+    <!-- Group toggle -->
+    <div class="projects-group-toggle reveal">
+      <button class="group-btn active" data-group="category">By Technology</button>
+      <button class="group-btn" data-group="company">By Company</button>
+    </div>
+
+    <!-- Category filters -->
+    <div class="projects-filter reveal" id="filter-category">
       <button class="filter-btn active" data-cat="all">All</button>
       {% for cat in cats %}
       <button class="filter-btn" data-cat="{{ cat }}">{{ cat }}</button>
       {% endfor %}
     </div>
 
+    <!-- Company filters -->
+    <div class="projects-filter reveal" id="filter-company" style="display:none">
+      <button class="filter-btn active" data-company="all">All</button>
+      {% for co in companies %}
+      <button class="filter-btn" data-company="{{ co }}">{{ co.split(' ')[0] }}</button>
+      {% endfor %}
+    </div>
+
     <div class="projects-grid">
       {% for p in projects %}
-      <div class="project-card reveal" data-category="{{ p.category }}" style="animation-delay:{{ loop.index0 * 0.06 }}s">
+      <div class="project-card reveal" data-category="{{ p.category }}" data-company="{{ p.company }}" style="animation-delay:{{ loop.index0 * 0.04 }}s">
         <div class="project-header">
           <span>
             <span class="project-cat">{{ p.category }}</span>
@@ -262,6 +278,11 @@
         <div class="project-name">{{ p.name }}</div>
         <div class="project-role">{{ p.company }} &middot; {{ p.role }}</div>
         <div class="project-desc">{{ p.description }}</div>
+        {% if p.highlights %}
+        <div class="project-highlights">
+          {% for h in p.highlights[:3] %}<div class="project-highlight-item">{{ h }}</div>{% endfor %}
+        </div>
+        {% endif %}
         {% if p.tech_stack %}
         <div class="project-tech">
           {% for t in p.tech_stack %}<span class="tag">{{ t }}</span>{% endfor %}
@@ -274,11 +295,10 @@
 </section>
 {% endif %}
 
-<!-- ── Education + Certifications ─────────────────────────── -->
+<!-- ── Education + Certifications ───────────────────────── -->
 <section id="education" class="section section--white">
   <div class="container">
     <div class="edu-certs-grid">
-      <!-- Education -->
       {% if education %}
       <div class="reveal">
         <span class="label">Education</span>
@@ -298,7 +318,6 @@
       </div>
       {% endif %}
 
-      <!-- Certifications -->
       {% if certifications %}
       <div class="reveal" style="animation-delay:.1s">
         <span class="label">Credentials</span>
@@ -320,7 +339,7 @@
   </div>
 </section>
 
-<!-- ── Research ────────────────────────────────────────────── -->
+<!-- ── Research ──────────────────────────────────────────── -->
 {% if research %}
 <section id="research" class="section section--dark">
   <div class="container">
@@ -328,7 +347,7 @@
       <span class="label">Intellectual Work</span>
       <h2>Research &amp; <span>Publications</span></h2>
       <p style="font-size:.9rem;color:rgba(255,255,255,.4);max-width:520px;margin-top:.75rem;line-height:1.7;">
-        Spanning quantum cryptography, computer vision, and evolutionary computation. Patent holder.
+        Spanning quantum cryptography, computer vision, and evolutionary computation.
       </p>
     </div>
     <div class="research-grid">
@@ -343,18 +362,69 @@
       </div>
       {% endfor %}
     </div>
-    <div class="patent-note reveal">
-      <div class="patent-line"></div>
-      <div>
-        <div class="patent-label">IP &amp; Innovation</div>
-        <div class="patent-text">Patent holder. Active contributor to AI research and thought leadership at Ernst &amp; Young and beyond.</div>
-      </div>
-    </div>
   </div>
 </section>
 {% endif %}
 
-<!-- ── Footer ──────────────────────────────────────────────── -->
+<!-- ── Contact ───────────────────────────────────────────── -->
+<section id="contact" class="section section--white">
+  <div class="container">
+    <div class="contact-layout">
+      <div class="contact-left reveal">
+        <span class="label">Get in Touch</span>
+        <h2 style="font-size:clamp(1.8rem,4vw,2.4rem);margin-bottom:1.5rem;">
+          Let's build<br><span style="color:var(--silver)">something remarkable.</span>
+        </h2>
+        <p style="font-size:.9rem;color:var(--graphite);line-height:1.8;max-width:380px;">
+          Open to conversations around enterprise AI architecture, practice leadership, advisory roles, speaking engagements, and meaningful collaborations.
+        </p>
+        <div style="margin-top:2.5rem;display:flex;flex-direction:column;gap:1rem;">
+          {% if profile and profile.linkedin_url %}
+          <a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener" class="contact-social-link">
+            <span class="contact-social-icon">in</span>
+            <span>LinkedIn — Connect Professionally</span>
+            <span class="contact-social-arrow">&nearr;</span>
+          </a>
+          {% endif %}
+          {% if profile and profile.credly_url %}
+          <a href="{{ profile.credly_url }}" target="_blank" rel="noopener" class="contact-social-link">
+            <span class="contact-social-icon">C</span>
+            <span>Credly — View Certifications</span>
+            <span class="contact-social-arrow">&nearr;</span>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+      <div class="contact-right reveal" style="animation-delay:.1s">
+        <div id="contact-form-wrap">
+          <form class="contact-form" hx-post="/contact" hx-target="#contact-form-wrap" hx-swap="innerHTML">
+            <div class="contact-form-row">
+              <div class="contact-field">
+                <label class="contact-label">Name</label>
+                <input class="contact-input" name="name" required placeholder="Your name" />
+              </div>
+              <div class="contact-field">
+                <label class="contact-label">Email</label>
+                <input class="contact-input" name="email" type="email" required placeholder="your@email.com" />
+              </div>
+            </div>
+            <div class="contact-field">
+              <label class="contact-label">Subject</label>
+              <input class="contact-input" name="subject" placeholder="What's this about?" />
+            </div>
+            <div class="contact-field">
+              <label class="contact-label">Message</label>
+              <textarea class="contact-textarea" name="message" required placeholder="Tell me about your project, idea, or question..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary contact-submit">Send Message</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────── -->
 <footer class="site-footer">
   <div class="container">
     <div class="footer-grid">
@@ -368,16 +438,13 @@
         {% if profile %}
         {% if profile.linkedin_url %}<a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener" class="footer-link">LinkedIn</a>{% endif %}
         {% if profile.credly_url %}<a href="{{ profile.credly_url }}" target="_blank" rel="noopener" class="footer-link">Credly Badges</a>{% endif %}
-        {% if profile.email %}<a href="mailto:{{ profile.email }}" class="footer-link">{{ profile.email }}</a>{% endif %}
-        {% if profile.phone %}<a href="tel:{{ profile.phone }}" class="footer-link">{{ profile.phone }}</a>{% endif %}
         {% endif %}
       </div>
       <div>
         <p class="footer-col-label">At a Glance</p>
-        {% if profile %}
-        {% if profile.years_experience %}<p class="footer-link" style="cursor:default">{{ profile.years_experience }}+ Years Experience</p>{% endif %}
-        {% if profile.solutions_delivered %}<p class="footer-link" style="cursor:default">{{ profile.solutions_delivered }}+ Enterprise AI Solutions</p>{% endif %}
-        {% if profile.visa_info %}<p class="footer-link" style="cursor:default">{{ profile.visa_info }}</p>{% endif %}
+        <p class="footer-link" style="cursor:default"><span data-yoe-live-inline></span>+ Years Experience</p>
+        {% if profile and profile.solutions_delivered %}
+        <p class="footer-link" style="cursor:default">{{ profile.solutions_delivered }}+ Enterprise AI Solutions</p>
         {% endif %}
       </div>
     </div>
@@ -388,8 +455,96 @@
   </div>
 </footer>
 
+<!-- ── Search Overlay ─────────────────────────────────────── -->
+<div class="search-overlay" id="searchOverlay" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="search-box">
+    <div class="search-input-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search projects, skills, experience..." autocomplete="off" />
+      <kbd class="search-esc">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+    <div class="search-footer">
+      <span>↑↓ Navigate</span>
+      <span>↵ Go to section</span>
+      <span>ESC Close</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── SIGMA Chat Button ──────────────────────────────────── -->
+<button class="sigma-trigger" id="sigmaTrigger" aria-label="Chat with SIGMA">
+  <div class="sigma-trigger-ring"></div>
+  <span class="sigma-trigger-icon">Σ</span>
+  <span class="sigma-trigger-label">Ask SIGMA</span>
+</button>
+
+<!-- ── SIGMA Chat Overlay ─────────────────────────────────── -->
+<div class="sigma-overlay" id="sigmaOverlay">
+  <div class="sigma-grid-bg"></div>
+  <div class="sigma-layout">
+    <!-- Left panel -->
+    <div class="sigma-left">
+      <div class="sigma-brand">
+        <div class="sigma-logo">Σ</div>
+        <div>
+          <div class="sigma-brand-name">SIGMA</div>
+          <div class="sigma-brand-sub">AI Agent · Praveen T N</div>
+        </div>
+        <div class="sigma-status">
+          <div class="sigma-status-dot"></div>
+          <span>Active</span>
+        </div>
+      </div>
+      <p class="sigma-description">
+        I'm Praveen's professional AI agent — trained exclusively on his career, projects, research, and expertise. Ask me anything about his work.
+      </p>
+      <div class="sigma-divider"></div>
+      <div class="sigma-suggestions-label">Suggested questions</div>
+      <div class="sigma-suggestions">
+        <button class="sigma-suggest" data-q="What are Praveen's most impactful AI projects?">Most impactful AI projects?</button>
+        <button class="sigma-suggest" data-q="Tell me about his expertise in agentic AI and LangGraph.">Expertise in agentic AI?</button>
+        <button class="sigma-suggest" data-q="What makes Praveen stand out as an AI architect?">What makes him stand out?</button>
+        <button class="sigma-suggest" data-q="Walk me through his career trajectory from 2010 to now.">Career trajectory?</button>
+        <button class="sigma-suggest" data-q="What enterprise AI solutions has he delivered at EY?">EY solutions delivered?</button>
+      </div>
+      <div class="sigma-divider"></div>
+      <div class="sigma-restriction">
+        <div class="sigma-restriction-icon">⚑</div>
+        <p>Restricted to Praveen T N's professional profile only.</p>
+      </div>
+    </div>
+    <!-- Right panel: chat -->
+    <div class="sigma-right">
+      <div class="sigma-topbar">
+        <div class="sigma-topbar-info">
+          <span class="sigma-topbar-title">Professional Intel</span>
+          <span class="sigma-topbar-limit" id="sigmaLimit">20 queries remaining</span>
+        </div>
+        <button class="sigma-close" id="sigmaClose" aria-label="Close chat">&times;</button>
+      </div>
+      <div class="sigma-messages" id="sigmaMessages">
+        <div class="sigma-msg sigma-msg--agent">
+          <div class="sigma-msg-badge">SIGMA</div>
+          <div class="sigma-msg-text">Initialising... I'm SIGMA, Praveen T N's AI agent. I have deep knowledge of his career, projects, technical expertise, and professional background. What would you like to know?</div>
+        </div>
+      </div>
+      <div class="sigma-input-wrap">
+        <textarea class="sigma-input" id="sigmaInput" placeholder="Ask about Praveen's work, projects, skills..." rows="1"></textarea>
+        <button class="sigma-send" id="sigmaSend" aria-label="Send">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Search index data -->
+<script>window.SEARCH_INDEX = {{ search_index_json | safe }};</script>
+
 {% endblock %}
 
 {% block scripts %}
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
 <script src="/static/main.js" defer></script>
 {% endblock %}

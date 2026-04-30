@@ -1,0 +1,18 @@
+{% if toast is defined %}<div data-toast="{{ toast }}" style="display:none"></div>{% endif %}
+<div class="a-section-header">
+  <span class="a-section-count">SIGMA Knowledge Base</span>
+  <span style="font-family:var(--font-mono);font-size:.62rem;color:rgba(255,255,255,.3)">Used by the chatbot as source</span>
+</div>
+<div style="background:#111;border:1px solid #2a2a2a;padding:1rem;margin-bottom:1rem;font-family:var(--font-mono);font-size:.7rem;color:rgba(255,255,255,.3);line-height:1.6;">
+  This document is the private knowledge base for SIGMA — Praveen's AI agent. Edit it to update what the chatbot knows. Supports plain text and Markdown. Not visible to the public.
+</div>
+<form hx-post="/admin/section/wiki" hx-target="#section-content" hx-swap="innerHTML">
+  <div class="a-field">
+    <label class="a-label">Wiki Content (Markdown)</label>
+    <textarea class="a-textarea" name="content" style="min-height:560px;font-family:var(--font-mono);font-size:.75rem;line-height:1.7;tab-size:2">{{ wiki.content if wiki else '' }}</textarea>
+  </div>
+  <div class="a-form-actions">
+    <button type="submit" class="a-btn a-btn-save">Save Wiki</button>
+    <span style="font-family:var(--font-mono);font-size:.62rem;color:rgba(255,255,255,.2);margin-left:1rem;">Changes take effect immediately for new chat sessions.</span>
+  </div>
+</form>

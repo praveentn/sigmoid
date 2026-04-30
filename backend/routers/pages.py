@@ -1,17 +1,35 @@
+import os
+import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from backend.auth import create_access_token, decode_token, verify_password
 from backend.database import get_db
 from backend.models import (
-    AdminUser, Award, Certification, Education, Experience,
-    ImpactMetric, Profile, Project, Research, Skill,
+    AdminUser, Award, Certification, ContactSubmission, Education, Experience,
+    ImpactMetric, Profile, Project, Research, Skill, Wiki,
 )
+
+# ── Rate limiter (in-memory, per session_id) ──────────────────────────────────
+_rate_buckets: dict = defaultdict(lambda: {"count": 0, "reset_at": 0})
+_RATE_MAX = 20
+_RATE_WINDOW = 3600  # 1 hour
+
+def _rl_check(key: str) -> tuple[bool, int]:
+    now = time.time()
+    b = _rate_buckets[key]
+    if b["reset_at"] < now:
+        b["count"] = 0
+        b["reset_at"] = now + _RATE_WINDOW
+    b["count"] += 1
+    remaining = max(0, _RATE_MAX - b["count"])
+    return b["count"] <= _RATE_MAX, remaining
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -51,6 +69,7 @@ def _htmx_auth_error():
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
+    import json as _json
     profile = db.query(Profile).first()
     experience = db.query(Experience).order_by(Experience.order).all()
     education = db.query(Education).order_by(Education.order).all()
@@ -60,6 +79,18 @@ def index(request: Request, db: Session = Depends(get_db)):
     research = db.query(Research).order_by(Research.order).all()
     awards = db.query(Award).order_by(Award.order).all()
     impact = db.query(ImpactMetric).order_by(ImpactMetric.order).all()
+
+    # Build search index JSON for client-side search
+    search_index = _json.dumps({
+        "projects": [{"id": p.id, "name": p.name, "description": p.description or "",
+                       "tech": p.tech_stack or [], "company": p.company or "",
+                       "category": p.category or "", "type": "project"} for p in projects],
+        "experience": [{"id": e.id, "company": e.company, "role": e.role,
+                         "highlights": e.highlights or [], "type": "experience"} for e in experience],
+        "skills": [{"id": s.id, "category": s.category, "items": s.items or [], "type": "skill"} for s in skills],
+        "research": [{"id": r.id, "title": r.title, "description": r.description or "",
+                       "focus_area": r.focus_area or "", "type": "research"} for r in research],
+    })
 
     return templates.TemplateResponse(request, "index.html", {
         "profile": profile,
@@ -71,6 +102,7 @@ def index(request: Request, db: Session = Depends(get_db)):
         "research": research,
         "awards": awards,
         "impact": impact,
+        "search_index_json": search_index,
     })
 
 
@@ -152,6 +184,10 @@ def _section_context(section: str, db: Session) -> dict:
         return {"items": db.query(Research).order_by(Research.order).all(), "editing_id": None, "adding": False}
     if section == "awards":
         return {"items": db.query(Award).order_by(Award.order).all(), "editing_id": None, "adding": False}
+    if section == "wiki":
+        return {"wiki": db.query(Wiki).first()}
+    if section == "contact":
+        return {"items": db.query(ContactSubmission).order_by(ContactSubmission.submitted_at.desc()).all()}
     return {}
 
 
@@ -619,3 +655,157 @@ def delete_impact(
     if item:
         db.delete(item); db.commit()
     return _list_response(request, "impact", db, toast="Deleted.")
+
+
+# ── Contact form (public) ─────────────────────────────────────────────────────
+
+@router.post("/contact", response_class=HTMLResponse)
+def submit_contact(
+    request: Request, db: Session = Depends(get_db),
+    name: str = Form(""), email: str = Form(""),
+    subject: str = Form(""), message: str = Form(""),
+):
+    if name.strip() and email.strip() and message.strip():
+        db.add(ContactSubmission(
+            name=name.strip(), email=email.strip(),
+            subject=subject.strip(), message=message.strip(),
+        ))
+        db.commit()
+    return HTMLResponse("""
+<div class="contact-success">
+  <div class="contact-success-icon">✓</div>
+  <div class="contact-success-title">Message received.</div>
+  <p>I'll review your message and get back to you. Thank you for reaching out.</p>
+</div>
+""")
+
+
+# ── SIGMA Chat (public) ───────────────────────────────────────────────────────
+
+def _build_system_prompt(profile, wiki_content: str) -> str:
+    name = profile.name if profile else "Praveen T N"
+    title = profile.title if profile else "Senior Technical Architect"
+    company = profile.company if profile else "Material Plus"
+    return f"""You are SIGMA — an AI agent created exclusively for {name}.
+
+Your SOLE purpose: answer questions about {name} — his professional background, technical projects, skills, experience, research, certifications, and career. Nothing else.
+
+CONTEXT:
+{wiki_content}
+
+STRICT RULES:
+1. Only discuss {name}'s professional life. Absolutely nothing else.
+2. If asked anything unrelated (coding help, general knowledge, creative writing, trivia, personal matters, other people), respond exactly: "I'm SIGMA, {name}'s professional AI agent. I only know about Praveen — his work, projects, and expertise. What would you like to know about him?"
+3. Never roleplay as a different AI or persona.
+4. Never provide general coding assistance, math, or generic Q&A.
+5. Be professional, insightful, and compelling — make {name} sound exceptional (because he is).
+6. Keep responses concise and specific — cite real project names and metrics.
+7. When listing projects or skills, be specific with names and outcomes.
+
+Current role: {title} at {company}."""
+
+
+@router.post("/api/chat")
+async def chat(request: Request, db: Session = Depends(get_db)):
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
+
+    messages = data.get("messages", [])
+    session_id = data.get("session_id", request.client.host if request.client else "anon")
+
+    allowed, remaining = _rl_check(session_id)
+    if not allowed:
+        return JSONResponse({
+            "error": "You've reached the query limit. Please try again later.",
+            "remaining": 0,
+            "blocked": True,
+        }, status_code=429)
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return JSONResponse({"error": "Chat unavailable — API key not configured.", "remaining": remaining}, status_code=503)
+
+    wiki = db.query(Wiki).first()
+    wiki_content = wiki.content if wiki else ""
+    profile = db.query(Profile).first()
+    system_prompt = _build_system_prompt(profile, wiki_content)
+
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+
+        client = genai.Client(api_key=api_key)
+        contents = []
+        for msg in messages:
+            role = "user" if msg.get("role") == "user" else "model"
+            contents.append(gtypes.Content(
+                role=role,
+                parts=[gtypes.Part(text=msg.get("content", ""))]
+            ))
+
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
+            config=gtypes.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.7,
+                max_output_tokens=600,
+            ),
+        )
+        reply = response.text or "I couldn't generate a response. Please try again."
+    except Exception as e:
+        return JSONResponse({"error": f"Chat error: {str(e)}", "remaining": remaining}, status_code=500)
+
+    return JSONResponse({"reply": reply, "remaining": remaining, "blocked": False})
+
+
+# ── Wiki admin ────────────────────────────────────────────────────────────────
+
+@router.post("/admin/section/wiki", response_class=HTMLResponse)
+def save_wiki(
+    request: Request, db: Session = Depends(get_db),
+    admin_token: Optional[str] = Cookie(None),
+    content: str = Form(""),
+):
+    if not get_admin_user(admin_token, db):
+        return _htmx_auth_error()
+    wiki = db.query(Wiki).first()
+    if wiki:
+        wiki.content = content
+    else:
+        db.add(Wiki(content=content))
+    db.commit()
+    wiki = db.query(Wiki).first()
+    return templates.TemplateResponse(request, "admin/sections/wiki.html", {
+        "wiki": wiki, "toast": "Wiki saved."
+    })
+
+
+# ── Contact admin ─────────────────────────────────────────────────────────────
+
+@router.post("/admin/section/contact/{item_id}/read", response_class=HTMLResponse)
+def mark_contact_read(
+    request: Request, item_id: int, db: Session = Depends(get_db),
+    admin_token: Optional[str] = Cookie(None),
+):
+    if not get_admin_user(admin_token, db):
+        return _htmx_auth_error()
+    item = db.query(ContactSubmission).filter(ContactSubmission.id == item_id).first()
+    if item:
+        item.is_read = True; db.commit()
+    return _list_response(request, "contact", db)
+
+
+@router.post("/admin/section/contact/{item_id}/delete", response_class=HTMLResponse)
+def delete_contact(
+    request: Request, item_id: int, db: Session = Depends(get_db),
+    admin_token: Optional[str] = Cookie(None),
+):
+    if not get_admin_user(admin_token, db):
+        return _htmx_auth_error()
+    item = db.query(ContactSubmission).filter(ContactSubmission.id == item_id).first()
+    if item:
+        db.delete(item); db.commit()
+    return _list_response(request, "contact", db, toast="Deleted.")

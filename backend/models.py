@@ -120,6 +120,26 @@ class ImpactMetric(Base):
     order = Column(Integer, default=0)
 
 
+class ContactSubmission(Base):
+    __tablename__ = "contact_submissions"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    subject = Column(String)
+    message = Column(Text, nullable=False)
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+    is_read = Column(Boolean, default=False)
+
+
+class Wiki(Base):
+    __tablename__ = "wiki"
+
+    id = Column(Integer, primary_key=True)
+    content = Column(Text, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
 

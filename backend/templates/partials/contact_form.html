@@ -1,0 +1,31 @@
+{% if captcha_error is defined and captcha_error %}
+<p style="font-size:.8rem;color:#e74c3c;margin-bottom:.75rem;font-family:var(--font-mono);">{{ captcha_error }}</p>
+{% endif %}
+<form class="contact-form" hx-post="/contact" hx-target="#contact-form-wrap" hx-swap="innerHTML">
+  <div class="contact-form-row">
+    <div class="contact-field">
+      <label class="contact-label">Name</label>
+      <input class="contact-input" name="name" required placeholder="Your name" />
+    </div>
+    <div class="contact-field">
+      <label class="contact-label">Email</label>
+      <input class="contact-input" name="email" type="email" required placeholder="your@email.com" />
+    </div>
+  </div>
+  <div class="contact-field">
+    <label class="contact-label">Subject</label>
+    <input class="contact-input" name="subject" placeholder="What's this about?" />
+  </div>
+  <div class="contact-field">
+    <label class="contact-label">Message</label>
+    <textarea class="contact-textarea" name="message" required placeholder="Tell me about your project, idea, or question..."></textarea>
+  </div>
+  <div class="contact-form-row" style="gap:1rem;align-items:flex-start;margin-bottom:0;">
+    <div class="contact-field" style="flex:0 0 auto;">
+      <label class="contact-label" style="font-size:.75rem;letter-spacing:.06em;">Security: {{ captcha_question }} = ?</label>
+      <input class="contact-input" name="captcha_answer" type="text" inputmode="numeric" required placeholder="?" autocomplete="off" style="max-width:88px;" />
+      <input type="hidden" name="captcha_token" value="{{ captcha_token }}" />
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary contact-submit">Send Message</button>
+</form>

@@ -1,4 +1,7 @@
+import hashlib
+import hmac as _hmac
 import os
+import random
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -12,7 +15,7 @@ from sqlalchemy.orm import Session
 from backend.auth import create_access_token, decode_token, verify_password
 from backend.database import get_db
 from backend.models import (
-    AdminUser, Award, Certification, ContactSubmission, Education, Experience,
+    AdminUser, AppSettings, Award, Certification, ContactSubmission, Education, Experience,
     ImpactMetric, Profile, Project, Research, Skill, Wiki,
 )
 
@@ -35,6 +38,34 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter(tags=["pages"])
+
+
+# ── Captcha helpers ───────────────────────────────────────────────────────────
+
+def _make_captcha() -> tuple[str, str]:
+    a, b = random.randint(1, 9), random.randint(1, 9)
+    answer = str(a + b)
+    expiry = str(int(time.time()) + 600)
+    secret = os.getenv("SECRET_KEY", "dev-secret")
+    msg = f"{answer}|{expiry}"
+    sig = _hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{a} + {b}", f"{msg}|{sig}"
+
+
+def _verify_captcha(user_answer: str, token: str) -> bool:
+    try:
+        parts = token.split("|")
+        if len(parts) != 3:
+            return False
+        stored_answer, expiry, sig = parts
+        if int(expiry) < int(time.time()):
+            return False
+        secret = os.getenv("SECRET_KEY", "dev-secret")
+        msg = f"{stored_answer}|{expiry}"
+        expected = _hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()[:16]
+        return _hmac.compare_digest(sig, expected) and stored_answer == user_answer.strip()
+    except Exception:
+        return False
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -79,6 +110,8 @@ def index(request: Request, db: Session = Depends(get_db)):
     research = db.query(Research).order_by(Research.order).all()
     awards = db.query(Award).order_by(Award.order).all()
     impact = db.query(ImpactMetric).order_by(ImpactMetric.order).all()
+    settings = db.query(AppSettings).first()
+    captcha_q, captcha_tok = _make_captcha()
 
     # Build search index JSON for client-side search
     search_index = _json.dumps({
@@ -103,6 +136,9 @@ def index(request: Request, db: Session = Depends(get_db)):
         "awards": awards,
         "impact": impact,
         "search_index_json": search_index,
+        "sigma_enabled": settings.sigma_enabled if settings else True,
+        "captcha_question": captcha_q,
+        "captcha_token": captcha_tok,
     })
 
 
@@ -185,7 +221,11 @@ def _section_context(section: str, db: Session) -> dict:
     if section == "awards":
         return {"items": db.query(Award).order_by(Award.order).all(), "editing_id": None, "adding": False}
     if section == "wiki":
-        return {"wiki": db.query(Wiki).first()}
+        settings = db.query(AppSettings).first()
+        return {
+            "wiki": db.query(Wiki).first(),
+            "sigma_enabled": settings.sigma_enabled if settings else True,
+        }
     if section == "contact":
         return {"items": db.query(ContactSubmission).order_by(ContactSubmission.submitted_at.desc()).all()}
     return {}
@@ -664,7 +704,15 @@ def submit_contact(
     request: Request, db: Session = Depends(get_db),
     name: str = Form(""), email: str = Form(""),
     subject: str = Form(""), message: str = Form(""),
+    captcha_answer: str = Form(""), captcha_token: str = Form(""),
 ):
+    captcha_q, captcha_tok = _make_captcha()
+    if not _verify_captcha(captcha_answer, captcha_token):
+        return templates.TemplateResponse(request, "partials/contact_form.html", {
+            "captcha_question": captcha_q,
+            "captcha_token": captcha_tok,
+            "captcha_error": "Incorrect answer — please try again.",
+        })
     if name.strip() and email.strip() and message.strip():
         db.add(ContactSubmission(
             name=name.strip(), email=email.strip(),
@@ -871,6 +919,10 @@ async def _call_sigmollm(messages: list, system_prompt: str) -> str:
 
 @router.post("/api/chat")
 async def chat(request: Request, db: Session = Depends(get_db)):
+    settings = db.query(AppSettings).first()
+    if settings and not settings.sigma_enabled:
+        return JSONResponse({"error": "SIGMA is currently offline.", "remaining": 0}, status_code=503)
+
     try:
         data = await request.json()
     except Exception:
@@ -940,9 +992,27 @@ def save_wiki(
         db.add(Wiki(content=content))
     db.commit()
     wiki = db.query(Wiki).first()
-    return templates.TemplateResponse(request, "admin/sections/wiki.html", {
-        "wiki": wiki, "toast": "Wiki saved."
-    })
+    ctx = _section_context("wiki", db)
+    ctx["toast"] = "Wiki saved."
+    return templates.TemplateResponse(request, "admin/sections/wiki.html", ctx)
+
+
+@router.post("/admin/section/wiki/sigma-toggle", response_class=HTMLResponse)
+def toggle_sigma(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin_token: Optional[str] = Cookie(None),
+):
+    if not get_admin_user(admin_token, db):
+        return _htmx_auth_error()
+    settings = db.query(AppSettings).first()
+    if settings:
+        settings.sigma_enabled = not settings.sigma_enabled
+        db.commit()
+    new_state = settings.sigma_enabled if settings else True
+    ctx = _section_context("wiki", db)
+    ctx["toast"] = f"SIGMA {'enabled' if new_state else 'disabled'}."
+    return templates.TemplateResponse(request, "admin/sections/wiki.html", ctx)
 
 
 # ── Contact admin ─────────────────────────────────────────────────────────────

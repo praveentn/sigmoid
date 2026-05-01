@@ -3,6 +3,19 @@
   <span class="a-section-count">SIGMA Knowledge Base</span>
   <span style="font-family:var(--font-mono);font-size:.62rem;color:rgba(255,255,255,.3)">Used by the chatbot as source</span>
 </div>
+<div style="background:#111;border:1px solid #2a2a2a;padding:.85rem 1rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+  <div>
+    <div style="font-family:var(--font-mono);font-size:.6rem;letter-spacing:.1em;color:rgba(255,255,255,.3);margin-bottom:.3rem;">SIGMA CHATBOT</div>
+    <div style="font-family:var(--font-mono);font-size:.8rem;color:{% if sigma_enabled %}#4ade80{% else %}rgba(255,255,255,.35){% endif %};">
+      {% if sigma_enabled %}● ENABLED{% else %}○ DISABLED{% endif %}
+    </div>
+  </div>
+  <form hx-post="/admin/section/wiki/sigma-toggle" hx-target="#section-content" hx-swap="innerHTML" style="display:inline;">
+    <button type="submit" class="a-btn {% if sigma_enabled %}a-btn-delete{% else %}a-btn-save{% endif %}" style="width:auto;padding:.4rem .9rem;">
+      {% if sigma_enabled %}Disable SIGMA{% else %}Enable SIGMA{% endif %}
+    </button>
+  </form>
+</div>
 <div style="background:#111;border:1px solid #2a2a2a;padding:1rem;margin-bottom:1rem;font-family:var(--font-mono);font-size:.7rem;color:rgba(255,255,255,.3);line-height:1.6;">
   This document is the private knowledge base for SIGMA — Praveen's AI agent. Edit it to update what the chatbot knows. Supports plain text and Markdown. Not visible to the public.
 </div>

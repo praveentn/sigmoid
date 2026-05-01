@@ -30,18 +30,19 @@ NAV_SECTIONS.forEach(id => {
   const mobile  = document.querySelector(`.mobile-nav a[href="#${id}"]`);
   navLinkMap[id] = [desktop, mobile].filter(Boolean);
 });
-const spyObserver = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      Object.values(navLinkMap).flat().forEach(l => l.classList.remove('active'));
-      (navLinkMap[e.target.id] || []).forEach(l => l.classList.add('active'));
-    }
-  });
-}, { threshold: 0.15, rootMargin: '-10% 0px -65% 0px' });
-NAV_SECTIONS.forEach(id => {
-  const el = document.getElementById(id);
-  if (el) spyObserver.observe(el);
-});
+
+function updateActiveNav() {
+  const triggerY = window.scrollY + Math.round(window.innerHeight * 0.25);
+  let activeId = null;
+  for (const id of NAV_SECTIONS) {
+    const el = document.getElementById(id);
+    if (el && el.getBoundingClientRect().top + window.scrollY <= triggerY) activeId = id;
+  }
+  Object.values(navLinkMap).flat().forEach(l => l.classList.remove('active'));
+  if (activeId) (navLinkMap[activeId] || []).forEach(l => l.classList.add('active'));
+}
+window.addEventListener('scroll', updateActiveNav, { passive: true });
+updateActiveNav();
 
 // ── Header scroll effect ──────────────────────────────────────
 const header = document.querySelector('.site-header');

@@ -1,7 +1,7 @@
 import os
 from backend.auth import hash_password
 from backend.models import (
-    AdminUser, Award, Certification, ContactSubmission, Education, Experience,
+    AdminUser, AppSettings, Award, Certification, ContactSubmission, Education, Experience,
     ImpactMetric, Profile, Project, Research, Skill, Wiki,
 )
 
@@ -662,3 +662,9 @@ def run_seed(db):
         db.add(Wiki(content=SEED_WIKI))
         db.commit()
         print("[seed] Wiki seeded.")
+
+    # AppSettings — create if missing
+    if not db.query(AppSettings).first():
+        db.add(AppSettings(sigma_enabled=True))
+        db.commit()
+        print("[seed] AppSettings seeded.")

@@ -12,7 +12,7 @@ Built with FastAPI + Jinja2 + HTMX. No frontend build step required.
 - **Templates**: Jinja2 (server-rendered HTML)
 - **Styling**: Custom CSS (black/white/grey, enterprise design)
 - **Interactivity**: HTMX + vanilla JS
-- **AI Chat**: SIGMA chatbot — SigmoLLM (primary) + Gemini `gemini-2.0-flash` (fallback)
+- **AI Chat**: SIGMA chatbot — Gemini `gemini-flash-latest`
 - **Deployment**: Railway (Python only, nixpacks)
 
 ---
@@ -66,22 +66,7 @@ The script creates a virtualenv, installs dependencies, and starts the server.
 | `DATABASE_URL` | PostgreSQL connection string (Railway internal URL) |
 | `SECRET_KEY` | JWT signing secret (long random string) |
 | `ADMIN_PASSWORD` | Password for the `/admin` interface |
-| `GEMINI_API_KEY` | Google AI Studio API key — primary SIGMA backend |
-
-### SigmoLLM (primary AI — required for SIGMA)
-
-| Variable | Description |
-|---|---|
-| `SIGMOLLM_URL` | SigmoLLM service base URL, e.g. `https://sigmollm-production.up.railway.app` |
-| `SIGMOLLM_API_KEY` | Bearer token for SigmoLLM (`Authorization: Bearer ...`) |
-
-### Gemini (fallback AI — optional)
-
-Used automatically when SigmoLLM is unavailable.
-
-| Variable | Description |
-|---|---|
-| `GEMINI_API_KEY` | Google AI Studio API key |
+| `GEMINI_API_KEY` | Google AI Studio API key — powers SIGMA chatbot |
 
 ### Railway-injected (do not set manually)
 
@@ -108,8 +93,7 @@ Sections managed via admin:
 1. Push to GitHub.
 2. Connect repo in Railway — auto-detected via `nixpacks.toml`.
 3. Add a PostgreSQL plugin — `DATABASE_URL` is injected automatically.
-4. Set environment variables: `SECRET_KEY`, `ADMIN_PASSWORD`, `SIGMOLLM_URL`, `SIGMOLLM_API_KEY`.
-5. Optionally set `GEMINI_API_KEY` as Gemini fallback.
+4. Set environment variables: `SECRET_KEY`, `ADMIN_PASSWORD`, `GEMINI_API_KEY`.
 6. Railway injects `PORT` automatically — do **not** set a custom target port.
 
 Seed data (full profile, 19 projects, skills, experience, wiki) is applied automatically on first boot.
@@ -120,8 +104,7 @@ Seed data (full profile, 19 projects, skills, experience, wiki) is applied autom
 
 SIGMA is a restricted AI assistant that answers questions about Praveen's career.
 
-- **Primary**: SigmoLLM via `POST {SIGMOLLM_URL}/api/chat` with Bearer auth (multi-turn)
-- **Fallback**: Gemini `gemini-2.0-flash` via Google AI Studio
+- **Backend**: Gemini `gemini-flash-latest` via Google AI Studio
 - **Context**: Pulls relevant sections from the SIGMA Wiki (admin-editable)
 - **Rate limit**: 20 queries per session per hour
 - **Stop**: Users can abort generation mid-stream via the stop button

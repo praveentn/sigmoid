@@ -855,7 +855,7 @@ async def _call_gemini(messages: list, system_prompt: str) -> str:
         for m in messages
     ]
     resp = client.models.generate_content(
-        model="gemini-2.0-flash-latest",
+        model="gemini-flash-latest",
         contents=contents,
         config=gtypes.GenerateContentConfig(
             system_instruction=system_prompt,

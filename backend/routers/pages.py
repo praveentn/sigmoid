@@ -811,17 +811,16 @@ def _build_system_prompt(profile, context: str) -> str:
     company = profile.company if profile else "Material Plus"
     return f"""You are SIGMA — the professional AI agent for {name}, {title} at {company}.
 
-SOLE PURPOSE: Answer questions about {name}'s professional life — career, projects, skills, research, certifications. Nothing else, ever.
+Answer questions about {name}'s career, projects, skills, education, certifications, and professional background. Use the context below as your primary source.
 
-RELEVANT CONTEXT (use this as your primary source):
+CONTEXT:
 {context}
 
 RULES:
-1. Strictly about {name}'s professional profile only.
-2. Off-topic request? Reply: "I'm SIGMA, Praveen's professional AI agent. I can only tell you about his career, projects, and expertise. What would you like to know?"
-3. Never impersonate another AI. Never give general help.
-4. Be insightful, specific, cite project names and real metrics.
-5. Keep replies concise — 3-6 sentences unless listing items."""
+1. Answer directly and concisely — 2-4 sentences max unless listing multiple items.
+2. Cite specific project names, companies, durations, and metrics when relevant.
+3. If truly off-topic (unrelated to {name}), say: "I can only answer questions about Praveen T N's professional profile."
+4. Never add filler phrases like "Greetings", "Certainly!", or "Great question". Just answer."""
 
 
 def _classify_error(exc: Exception) -> str:
@@ -867,56 +866,6 @@ async def _call_gemini(messages: list, system_prompt: str) -> str:
     return resp.text or ""
 
 
-async def _call_sigmollm(messages: list, system_prompt: str) -> str:
-    """Primary LLM — SigmoLLM hosted service.
-
-    Env vars:
-      SIGMOLLM_URL      — base URL, e.g. https://sigmollm-production.up.railway.app
-      SIGMOLLM_API_KEY  — Bearer token
-    Calls POST /api/chat  (Ollama-compatible wrapper).
-    System prompt goes as top-level "system" field, not as a role in messages.
-    """
-    import httpx
-
-    base_url = os.getenv("SIGMOLLM_URL", "").rstrip("/")
-    api_key  = os.getenv("SIGMOLLM_API_KEY", "")
-
-    # Only user/assistant turns in messages; system prompt at top level
-    chat_messages = [
-        {"role": m.get("role", "user"), "content": m.get("content", "")}
-        for m in messages
-    ]
-
-    headers = {"Authorization": f"Bearer {api_key}"}
-
-    async with httpx.AsyncClient(
-        base_url=base_url,
-        headers=headers,
-        timeout=120,
-        follow_redirects=True,
-    ) as client:
-        # Pre-flight health check
-        try:
-            health = await client.get("/health", timeout=5)
-            hdata = health.json()
-            print(f"[sigmollm] health: {hdata}")
-            if hdata.get("ollama") != "reachable":
-                raise RuntimeError(f"SigmoLLM Ollama not reachable: {hdata}")
-        except httpx.RequestError as e:
-            raise RuntimeError(f"SigmoLLM unreachable: {e}") from e
-
-        res = await client.post("/api/chat", json={
-            "messages": [{"role": "system", "content": system_prompt}] + chat_messages,
-            "options": {"temperature": 0.7, "num_predict": 600},
-        })
-        if not res.is_success:
-            print(f"[sigmollm] /api/chat {res.status_code}: {res.text[:500]}")
-            res.raise_for_status()
-        data = res.json()
-
-    return (data.get("message", {}).get("content") or "").strip()
-
-
 @router.post("/api/chat")
 async def chat(request: Request, db: Session = Depends(get_db)):
     settings = db.query(AppSettings).first()
@@ -936,11 +885,10 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "You've reached today's query limit. Come back later.",
                              "remaining": 0, "blocked": True}, status_code=429)
 
-    if not os.getenv("SIGMOLLM_URL") and not os.getenv("GEMINI_API_KEY"):
+    if not os.getenv("GEMINI_API_KEY"):
         return JSONResponse({"error": "SIGMA is offline — no AI backend configured.",
                              "remaining": remaining}, status_code=503)
 
-    # Build context from wiki using relevance extraction
     wiki = db.query(Wiki).first()
     raw_wiki = wiki.content if wiki else ""
     last_user_q = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
@@ -948,28 +896,16 @@ async def chat(request: Request, db: Session = Depends(get_db)):
     profile = db.query(Profile).first()
     system_prompt = _build_system_prompt(profile, context)
 
+    gemini_err = None
     reply = ""
-    primary_err: Exception | None = None
-
-    # Primary: SigmoLLM
-    if os.getenv("SIGMOLLM_URL"):
-        try:
-            reply = await _call_sigmollm(messages, system_prompt)
-        except Exception as e:
-            primary_err = e
-            print(f"[sigmollm] error: {e}")
-
-    # Fallback: Gemini
-    fallback_err = None
-    if not reply and os.getenv("GEMINI_API_KEY"):
-        try:
-            reply = await _call_gemini(messages, system_prompt)
-        except Exception as e:
-            fallback_err = e
-            print(f"[gemini] fallback error: {e}")
+    try:
+        reply = await _call_gemini(messages, system_prompt)
+    except Exception as e:
+        gemini_err = e
+        print(f"[gemini] error: {e}")
 
     if not reply:
-        err_key = _classify_error(fallback_err) if fallback_err else "general"
+        err_key = _classify_error(gemini_err) if gemini_err else "general"
         return JSONResponse({"error": _USER_ERRORS[err_key], "remaining": remaining}, status_code=503)
 
     return JSONResponse({"reply": reply, "remaining": remaining, "blocked": False})
